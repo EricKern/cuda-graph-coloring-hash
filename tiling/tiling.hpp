@@ -5,6 +5,7 @@
  * Created by Robert Gutmann for student research project.
  * In case of problems, contact me: r.gutmann@stud.uni-heidelberg.de.
  **/
+#include <cstdint>
 
 double // returns time measurement of tiling process (subdivide layers in grouped rows called tiles)
 tiling_partitioning(
