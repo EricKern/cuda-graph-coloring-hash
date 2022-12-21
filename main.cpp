@@ -6,12 +6,11 @@
  * In case of problems, contact me: r.gutmann@stud.uni-heidelberg.de.
  **/
 
-#include <cmath> //! fabs, sqrt, INFINITY, atoi
-#include <cstdint> //! uint8_t
 #include <cstdio> //! fprintf
-#include <cstring> //! memset, NULL
-#include "cpumultiply/cpumultiply.hpp" //! header file for tiling
-#include "tiling/tiling.hpp" //! header file for tiling
+#include <cstdlib> //! atoi
+
+#include <cpumultiply.hpp> //! header file for tiling
+#include <tiling.hpp> //! header file for tiling
 
 /**
  * @brief Main entry point for all CPU versions
@@ -30,10 +29,10 @@ void simple_tiling(const int m_rows,
                    int** const slices_dptr,
                    int** const ndc_dptr,
                    int** const offsets_dptr) {
-	int indices_[2] = {0, m_rows};
-	int number_of_slices = 1, *slices_ = new int[m_rows],
-	    *layers_ = new int[m_rows];
-	memset(layers_, 0, m_rows * sizeof(int));
+	int indices_[] = {0, m_rows};
+	int number_of_slices = 1;
+	int* slices_ = new int[m_rows];
+	int* layers_ = new int[m_rows];
 	for (int i = 0; i < m_rows; i++) {
 		slices_[i] = i;
 		layers_[i] = 0;
@@ -49,9 +48,9 @@ void simple_tiling(const int m_rows,
 	                    slices_,
 	                    ndc_dptr,
 	                    slices_dptr,
-	                    NULL,
+	                    nullptr,
 	                    offsets_dptr,
-	                    NULL,
+	                    nullptr,
 	                    &number_of_slices,
 	                    0);
 	delete[] layers_;
@@ -75,8 +74,9 @@ int double_multiply(const char* const inputMat, const int number_of_tiles) {
 	int* slices_; // array with nodes grouped in slices
 	int* offsets_;
 	// initialise reference array
-	for (int i = 0; i < m_rows; i++)
-		mult_ptr[i] = i * 0.1;
+	for (int i = 0; i < m_rows; i++) {
+		mult_ptr[i] = static_cast<double>(i) * 0.1;
+	}
 	simple_tiling(
 	    m_rows, number_of_tiles, row_ptr, col_ptr, &slices_, &ndc_, &offsets_);
 	// spMV without permutation
@@ -132,8 +132,9 @@ int float_multiply(const char* const inputMat, const int number_of_tiles) {
 	int* slices_; // array with nodes grouped in slices
 	int* offsets_;
 	// initialise reference array
-	for (int i = 0; i < m_rows; i++)
-		mult_ptr[i] = i * 0.1;
+	for (int i = 0; i < m_rows; i++) {
+		mult_ptr[i] = static_cast<float>(i) * 0.1f;
+	}
 	simple_tiling(
 	    m_rows, number_of_tiles, row_ptr, col_ptr, &slices_, &ndc_, &offsets_);
 	// spMV without permutation
@@ -178,11 +179,13 @@ int float_multiply(const char* const inputMat, const int number_of_tiles) {
  */
 int main(int argc, char* argv[]) {
 	if (argc < 3) {
-		fprintf(stderr, "USAGE: %s matrix-path number-of-tiles\n", argv[0]);
+		std::fprintf(stderr,
+		             "USAGE: %s matrix-path number-of-tiles [double]\n",
+		             argv[0]);
 		return EXIT_FAILURE;
 	}
 	char* inputMat = argv[1];
-	const int number_of_tiles = atoi(argv[2]);
+	const int number_of_tiles = std::atoi(argv[2]);
 	return (argc == 3) ? float_multiply(inputMat, number_of_tiles)
-	                   : float_multiply(inputMat, number_of_tiles);
+	                   : double_multiply(inputMat, number_of_tiles);
 }
