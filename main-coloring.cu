@@ -1,6 +1,7 @@
 #include <cpumultiply.hpp>  //! header file for tiling
 #include <tiling.hpp>       //! header file for tiling
 #include <coloring.cuh>
+#include <hash.cuh>
 
 /**
  * @brief Main entry point for all CPU versions
@@ -100,6 +101,9 @@ int main() {
   cudaMemcpy(d_intra_tile_sep, offsets_, intra_tile_sep_len * sizeof(int),
              cudaMemcpyHostToDevice);
 
+  Counters* d_results;
+  cudaMalloc((void**)&d_results, number_of_tiles * sizeof(Counters));
+
   // calc shMem
   size_t shMem_bytes = (max_nodes + max_edges) * sizeof(int);
   dim3 gridSize(number_of_tiles);
@@ -107,7 +111,11 @@ int main() {
 
   coloring1Kernel<<<gridSize, blockSize, shMem_bytes>>>(
       d_row_ptr, d_col_ptr, d_tile_boundaries, d_intra_tile_sep, m_rows,
-      max_nodes, max_edges);
+      max_nodes, max_edges, d_results);
   cudaDeviceSynchronize();
+
+  Counters result;
+  cudaMemcpy(&result, d_results, 1 * sizeof(Counters),
+            cudaMemcpyDeviceToHost);
   return 0;
 }

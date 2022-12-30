@@ -1,3 +1,4 @@
+#pragma once
 // 1. copy permuted matrix to device
 //    (In the following: tile = partition)
 //    tile_boundaries: array of indices giving the starting index of each partition.
@@ -7,6 +8,10 @@
 //    intra_tile_sep: array of indices giving the starting index of the first
 //    intra-tile node in each partition.
 #include <cooperative_groups.h>
+#include <hash.cuh>
+
+#include <cub/cub.cuh>
+
 namespace cg = cooperative_groups;
 
 template <typename IndexType>
@@ -35,12 +40,14 @@ void Partition2ShMem(IndexType* shMemRows,
   for (uint i = threadIdx.x; i < num_cols; i += blockDim.x){
     shMemCols[i] = col_ptr[i + col_offset];
   }
-  
+
   cg::this_thread_block().sync();
   // If partition contains n nodes then we now have
   // n+1 elements of row_ptr in shMem and the col_ptr values for
   // n nodes
 }
+
+__device__ unsigned int retirementCount = 0;
 
 template <typename IndexType>
 __global__
@@ -50,7 +57,8 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
                      IndexType* intra_tile_sep,
                      uint m_rows,
                      uint tile_max_nodes,
-                     uint tile_max_edges){
+                     uint tile_max_edges,
+                     Counters* d_results){
   //uint number_of_tiles = gridDim.x;
 
   extern __shared__ IndexType shMem[];
@@ -58,4 +66,94 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
   IndexType* shMemCols = &shMemRows[tile_max_nodes]; // tile_max_edges elements
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
+
+  // thread local array to count collisions
+  Counters node_collisions;
+
+  // Global mem access in tile_boundaries !!!!!
+  uint partNr = blockIdx.x;
+  uint local_rows = tile_boundaries[partNr+1] - tile_boundaries[partNr];
+
+  // 
+  for (uint i = threadIdx.x; i < local_rows; i += blockDim.x){
+    auto const glob_row = tile_boundaries[partNr] + i;
+    auto const row_begin = shMemRows[i];
+		auto const row_end = shMemRows[i + 1];
+
+    for (auto col_idx = row_begin; col_idx < row_end; ++col_idx) {
+      auto const col = shMemCols[col_idx - shMemRows[0]];
+      // col_idx - shMemRows[0] transforms global col_idx to shMem index
+
+      auto const row_hash = hash(glob_row, static_k_param);
+      auto const col_hash = hash(col, static_k_param);
+
+      # pragma unroll max_bitWidth
+      for(auto bit_w = 1; bit_w <= max_bitWidth; ++bit_w){
+        uint mask = (1u << bit_w) - 1;
+        if((row_hash & mask) == (col_hash & mask)){
+          node_collisions.m[bit_w-1] += 1;
+        }
+        // else if {
+        //   // if hashes differ in lower bits they also differ when increasing
+        //   // the bit_width
+        //   break;
+        // }
+      }
+    }
+  }
+
+  cg::this_thread_block().sync();
+  // Now each thread has counted all local collisions
+  // and we can do sum and max reduction for desired output
+
+  // template BlockDim is bad
+  typedef cub::BlockReduce<Counters, 512> BlockReduce;
+  using TempStorageT = typename BlockReduce::TempStorage;
+
+  TempStorageT temp_storage = reinterpret_cast<TempStorageT&>(shMem);
+
+  Counters aggregate = BlockReduce(temp_storage).Reduce(node_collisions,
+        [](Counters& rhs, Counters& lhs){
+          Counters tmp;
+          for(auto i = 0; i < max_bitWidth; ++i){
+            tmp.m[i] = rhs.m[i] + lhs.m[i];
+          }
+          return tmp;
+        }, local_rows);
+
+  if(threadIdx.x == 0){
+    d_results[blockIdx.x] = aggregate;
+  }
+
+  __threadfence();
+
+  __shared__ bool amLast;
+  // Thread 0 takes a ticket
+  if (threadIdx.x == 0) {
+    unsigned int ticket = atomicInc(&retirementCount, gridDim.x);
+    // If the ticket ID is equal to the number of blocks, we are the last
+    // block!
+    amLast = (ticket == gridDim.x - 1);
+  }
+
+  // cg::this_thread_block().sync();
+
+  // // The last block sums the results of all other blocks
+  // if (amLast) {
+  //   node_collisions = BlockReduce(temp_storage).Reduce(d_results[threadIdx.x],
+  //         [](Counters& rhs, Counters& lhs){
+  //           Counters tmp;
+  //           for(auto i = 0; i < max_bitWidth; ++i){
+  //             tmp.m[i] = rhs.m[i] + lhs.m[i];
+  //           }
+  //           return tmp;
+  //         }, gridDim.x);
+
+  //   if (threadIdx.x == 0) {
+  //     d_results[0] = node_collisions;
+
+  //     // reset retirement count so that next run succeeds
+  //     // retirementCount = 0;
+  //   }
+  // }
 }
