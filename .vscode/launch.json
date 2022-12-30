@@ -9,7 +9,8 @@
             "type": "cuda-gdb",
             "request": "launch",
             "program": "/home/eric/Documents/graph-coloring/dbg-build/example",
-            "args": "/home/eric/Documents/graph-coloring/CurlCurl_0.mtx 7"
+            "args": "/home/eric/Documents/graph-coloring/cage3.mtx 2",
+            "preLaunchTask": "mk"
         },
         {
             "name": "CUDA C++: Attach",
