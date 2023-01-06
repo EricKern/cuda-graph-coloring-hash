@@ -9,10 +9,12 @@
 //    intra-tile node in each partition.
 #include <cooperative_groups.h>
 #include <hash.cuh>
+#include <coloringCounters.cuh>
 
 #include <cub/cub.cuh>
 
 namespace cg = cooperative_groups;
+
 
 template <typename IndexType>
 __forceinline__ __device__
@@ -46,27 +48,7 @@ void Partition2ShMem(IndexType* shMemRows,
   // n+1 elements of row_ptr in shMem and the col_ptr values for
   // n nodes
 }
-struct Sum_Counters {
-  __host__ __device__ __forceinline__ Counters
-  operator()(const Counters& a, const Counters& b) const {
-    Counters tmp;
-    for (auto i = 0; i < max_bitWidth; ++i) {
-      tmp.m[i] = a.m[i] + b.m[i];
-    }
-    return tmp;
-  }
-};
 
-struct Max_Counters {
-  __host__ __device__ __forceinline__ Counters
-  operator()(const Counters& a, const Counters& b) const {
-    Counters tmp;
-    for (auto i = 0; i < max_bitWidth; ++i) {
-      tmp.m[i] = max(a.m[i], b.m[i]);
-    }
-    return tmp;
-  }
-};
 
 __device__ unsigned int retirementCount = 0;
 
@@ -83,8 +65,8 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
   //uint number_of_tiles = gridDim.x;
 
   extern __shared__ IndexType shMem[];
-  IndexType* shMemRows = shMem;                      // tile_max_nodes elements
-  IndexType* shMemCols = &shMemRows[tile_max_nodes]; // tile_max_edges elements
+  IndexType* shMemRows = shMem;                      // tile_max_nodes +1 elements
+  IndexType* shMemCols = &shMemRows[tile_max_nodes+1]; // tile_max_edges elements
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
 
@@ -103,11 +85,12 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
     auto const row_begin = shMemRows[i];
 		auto const row_end = shMemRows[i + 1];
 
+    auto const row_hash = hash(glob_row, static_k_param);
+    
     for (auto col_idx = row_begin; col_idx < row_end; ++col_idx) {
       auto const col = shMemCols[col_idx - shMemRows[0]];
       // col_idx - shMemRows[0] transforms global col_idx to shMem index
 
-      auto const row_hash = hash(glob_row, static_k_param);
       auto const col_hash = hash(col, static_k_param);
 
       # pragma unroll max_bitWidth

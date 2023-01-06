@@ -1,10 +1,7 @@
 #pragma once
 #include <cstdint>
 
-
 static constexpr int static_k_param{7};
-
-static constexpr int max_bitWidth{8};
 
 template <typename IndexType>
 __forceinline__ __device__ std::uint32_t hash(IndexType val,
@@ -13,8 +10,3 @@ __forceinline__ __device__ std::uint32_t hash(IndexType val,
 	auto const divisor = (1u << k_param) - 1u;
 	return (uval / divisor) << k_param | (uval % divisor);
 }
-
-struct Counters {
-	using value_type = uint32_t;
-	value_type m[max_bitWidth]{};
-};

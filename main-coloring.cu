@@ -1,7 +1,7 @@
 #include <cpumultiply.hpp>  //! header file for tiling
 #include <tiling.hpp>       //! header file for tiling
 #include <coloring.cuh>
-#include <hash.cuh>
+
 #include <stdio.h>
 
 // #include <thrust/host_vector.h>
@@ -80,8 +80,8 @@ void printResult(const Counters &res){
 }
 
 int main() {
-  const char* inputMat = "/home/eric/Documents/graph-coloring/cage3.mtx";
-  const uint number_of_tiles = 12;
+  const char* inputMat = "/home/eric/Documents/graph-coloring/CurlCurl_0.mtx";
+  const uint number_of_tiles = 7;
 
   int* row_ptr;
   int* col_ptr;
@@ -159,6 +159,6 @@ int main() {
   thrust::device_vector<double> d_nnz = nnz;
 
   namespace asc18 = asc_hash_graph_coloring;
-  asc18::cusparse_distance1(d_nnz, d_row, d_col, 0);
+  asc18::cusparse_distance1(d_nnz, d_row, d_col, 1);
   return 0;
 }
