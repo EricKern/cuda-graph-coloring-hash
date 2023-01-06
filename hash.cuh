@@ -2,7 +2,7 @@
 #include <cstdint>
 
 
-static constexpr int static_k_param{3};
+static constexpr int static_k_param{7};
 
 static constexpr int max_bitWidth{8};
 

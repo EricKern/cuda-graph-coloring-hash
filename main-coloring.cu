@@ -2,6 +2,11 @@
 #include <tiling.hpp>       //! header file for tiling
 #include <coloring.cuh>
 #include <hash.cuh>
+#include <stdio.h>
+
+// #include <thrust/host_vector.h>
+// #include <thrust/device_vector.h>
+#include <asc.cuh>
 
 /**
  * @brief Main entry point for all CPU versions
@@ -58,22 +63,38 @@ void get_MaxTileSize(const uint number_of_tiles, int* ndc_, int* row_ptr, uint* 
   *maxEdges = tile_edge_max;
 }
 
+template <bool max = false>
+void printResult(const Counters &res){
+  if (max == false){
+    printf("Total Collisions\n");
+    for (uint i = 0; i < max_bitWidth; ++i) {
+      printf("Mask: %d, Collisions: %d\n", i+1, res.m[i]);
+    }
+  } else {
+    printf("Max Collisions per Node\n");
+    for (uint i = 0; i < max_bitWidth; ++i) {
+      printf("Mask: %d, Collisions: %d\n", i+1, res.m[i]);
+    }
+  }
+
+}
+
 int main() {
-  const char* inputMat = "/home/eric/Documents/graph-coloring/CurlCurl_0.mtx";
+  const char* inputMat = "/home/eric/Documents/graph-coloring/cage3.mtx";
   const uint number_of_tiles = 12;
 
   int* row_ptr;
   int* col_ptr;
-  float* val_ptr;  // create pointers for matrix in csr format
+  double* val_ptr;  // create pointers for matrix in csr format
   const int m_rows =
-      cpumultiplySloadMTX(inputMat, &row_ptr, &col_ptr, &val_ptr);
+      cpumultiplyDloadMTX(inputMat, &row_ptr, &col_ptr, &val_ptr);
 
   int* ndc_;     // array with indices of each tile in all slices
   int* slices_;  // array with nodes grouped in slices
   int* offsets_;
   simple_tiling(m_rows, number_of_tiles, row_ptr, col_ptr, &slices_, &ndc_,
                 &offsets_);
-  cpumultiplySpermuteMatrix(number_of_tiles, 1, ndc_, slices_, row_ptr, col_ptr,
+  cpumultiplyDpermuteMatrix(number_of_tiles, 1, ndc_, slices_, row_ptr, col_ptr,
                             val_ptr, &row_ptr, &col_ptr, &val_ptr, true);
 
   uint max_nodes, max_edges;
@@ -102,7 +123,7 @@ int main() {
              cudaMemcpyHostToDevice);
 
   Counters* d_results;
-  cudaMalloc((void**)&d_results, number_of_tiles * sizeof(Counters));
+  cudaMalloc((void**)&d_results, number_of_tiles * 2 *sizeof(Counters));
 
   // calc shMem
   size_t shMem_bytes = (max_nodes + max_edges) * sizeof(int);
@@ -114,8 +135,30 @@ int main() {
       max_nodes, max_edges, d_results);
   cudaDeviceSynchronize();
 
-  Counters result;
-  cudaMemcpy(&result, d_results, 1 * sizeof(Counters),
+  Counters total;
+  cudaMemcpy(&total, d_results, 1 * sizeof(Counters),
             cudaMemcpyDeviceToHost);
+  Counters max;
+  cudaMemcpy(&max, d_results + 1, 1 * sizeof(Counters),
+            cudaMemcpyDeviceToHost);
+
+  printResult(total);
+  printResult<true>(max);
+
+  cudaFree(d_row_ptr);
+  cudaFree(d_col_ptr);
+  cudaFree(d_tile_boundaries);
+  cudaFree(d_intra_tile_sep);
+
+  thrust::host_vector<int> row(row_ptr, row_ptr + m_rows + 1);
+  thrust::host_vector<int> col(col_ptr, col_ptr + row_ptr[m_rows]);
+  thrust::host_vector<double> nnz(val_ptr, val_ptr + row_ptr[m_rows]);
+  
+  thrust::device_vector<int> d_row = row;
+  thrust::device_vector<int> d_col = col;
+  thrust::device_vector<double> d_nnz = nnz;
+
+  namespace asc18 = asc_hash_graph_coloring;
+  asc18::cusparse_distance1(d_nnz, d_row, d_col, 0);
   return 0;
 }
