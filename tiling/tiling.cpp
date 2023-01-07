@@ -844,3 +844,60 @@ double tiling_partitioning(const int m_rows,
 	end_ = Clock::now(); // stop of the time measurement
 	return DSeconds(end_ - start_).count(); // return duration
 }
+
+// utility functions
+
+
+/// @brief 
+/// @param [in] m_rows 
+/// @param [in] number_of_tiles 
+/// @param [in] row_ptr 
+/// @param [in] col_ptr 
+/// @param [out] slices_dptr 
+/// @param [out] ndc_dptr 
+/// @param [out] offsets_dptr 
+void simple_tiling(const int m_rows, const int number_of_tiles,
+                   const int* const row_ptr, const int* const col_ptr,
+                   int** const slices_dptr, int** const ndc_dptr,
+                   int** const offsets_dptr) {
+  int indices_[] = {0, m_rows};
+  int number_of_slices = 1;
+  int* slices_ = new int[m_rows];
+  int* layers_ = new int[m_rows];
+  for (int i = 0; i < m_rows; i++) {
+    slices_[i] = i;
+    layers_[i] = 0;
+  }
+  *slices_dptr = slices_;
+  tiling_partitioning(m_rows, number_of_tiles, number_of_slices, row_ptr,
+                      col_ptr, layers_, indices_, slices_, ndc_dptr,
+                      slices_dptr, nullptr, offsets_dptr, nullptr,
+                      &number_of_slices, 0);
+  delete[] layers_;
+}
+
+/// @brief 
+/// @param [in] number_of_tiles 	:
+/// @param [in] ndc_ 				:	indices separating the matrix in tiles
+/// @param [in] row_ptr 			:	where ndc_ points to. Points to col_indices
+/// @param [out] maxTileSize 		:	maximum nr of nodes in a tile
+/// @param [out] maxEdges 			:	max length of col_ptr array in a tile
+void get_MaxTileSize(const uint number_of_tiles, int* ndc_, int* row_ptr,
+                     uint* maxTileSize, uint* maxEdges) {
+  uint tile_node_max = 0;
+  uint tile_edge_max = 0;
+  // go over tiles
+  for (uint tile_nr = number_of_tiles; tile_nr > 0; --tile_nr) {
+    // calculate tile size
+    const uint tile_sz = ndc_[tile_nr] - ndc_[tile_nr - 1];
+    if (tile_sz > tile_node_max)  // if tile size is bigger than the maximal one
+      tile_node_max = tile_sz;    // overwrite the maximal value
+
+    const uint tile_edges = row_ptr[ndc_[tile_nr]] - row_ptr[ndc_[tile_nr - 1]];
+    if (tile_edges > tile_edge_max)
+      tile_edge_max = tile_edges;
+  }
+  // Return:
+  *maxTileSize = tile_node_max;
+  *maxEdges = tile_edge_max;
+}

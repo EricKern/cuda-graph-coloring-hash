@@ -62,3 +62,13 @@ tiling_triangular(
     int* const
         tile_count); // desired number of tiles each slice is partitioned into (can be set to NULL, if no output required)
 
+
+void simple_tiling(const int m_rows, const int number_of_tiles,
+                   const int* const row_ptr,
+                   const int* const col_ptr,
+                   int** const slices_dptr,
+                   int** const ndc_dptr,
+                   int** const offsets_dptr);
+
+void get_MaxTileSize(const uint number_of_tiles, int* ndc_, int* row_ptr,
+                     uint* maxTileSize, uint* maxEdges);
