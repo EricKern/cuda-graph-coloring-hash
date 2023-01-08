@@ -11,6 +11,8 @@ kommt auf 15 Farben??? Naive würden wir sagen, dass höchstens 5 Farben reichen
 Warum verändert sich die Anzahl nötiger Farben von CusparseColoring, wenn man die Anzahl der Partitions ändert?
 Sollte ja eigentlich gleich bleiben. Matrix wird anders permutiert, aber sollte Ergebniss nicht beeinflussen oder?
 
+Aktuell sehen wir keinen Grund die Nodes am Rand anders zu behandeln als die Nodes im Inneren einer Partition.
+
 Dist1 coloring:
     Wenn es keine Collisions bei kurzen Bitmasken gibt, wird es auch keine Collisions bei längeren
     bitmasken geben. Man könnte mit break im else-Zweig die Schleife über die unterschiedlichen masken längen
@@ -21,12 +23,10 @@ NsightCompute? NVTX + NsightSystems geht nur außerhalb von Kernels oder?
 
 Distance2
 - dist2 algorithmus richtig verstanden
-- Wieviel shared mem? max Nodedegree vs exact
 - sorting erzwingt monolitischen Kernel?
-- memory layout in ShMem
-- umgang mit variablem Nodedegree
+- memory layout in ShMem u. Wieviel shared mem?
 - sorting network?
 
-Wie können wir das alte 2018 Projekt bauen? Wo CMake Package Dependency "AscMatrixIO"?
+Wie können wir das alte 2018 Projekt bauen? CMake Package Dependency "AscMatrixIO" finden wir nicht.
 
 Distance2 Coloring mit cusparse? Matrix mit sichselbst multiplizieren und auf ergebnis dann Distance1Coloring von Cusparse anwenden?

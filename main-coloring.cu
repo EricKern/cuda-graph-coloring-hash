@@ -27,8 +27,8 @@ void printResult(const Counters &res){
 }
 
 int main() {
-  const char* inputMat = def::Mat0;
-  const uint number_of_tiles = 2;
+  const char* inputMat = def::Mat2;
+  const uint number_of_tiles = 12;
 
   int* row_ptr;
   int* col_ptr;
@@ -73,7 +73,7 @@ int main() {
   get_MaxTileSize(number_of_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
   
   // calc shMem
-  size_t shMem_bytes = (max_nodes + max_edges) * sizeof(int);
+  size_t shMem_bytes = (max_nodes+1 + max_edges) * sizeof(int);
   dim3 gridSize(number_of_tiles);
   dim3 blockSize(512);
 

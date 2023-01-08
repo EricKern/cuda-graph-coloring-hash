@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-static constexpr int max_bitWidth{8};
+static constexpr int max_bitWidth{14};
 
 struct Counters {
 	using value_type = uint32_t;
@@ -28,4 +28,14 @@ struct Max_Counters {
     }
     return tmp;
   }
+};
+
+template <typename T>
+struct brev_cmp {
+  static_assert(std::is_integral_v<T>);
+	__forceinline__ __host__ __device__ bool operator()(T a,
+	                                                    T b) const noexcept {
+		using UT = std::make_unsigned_t<T>;
+		return __brev(static_cast<UT>(a)) < __brev(static_cast<UT>(b));
+	}
 };
