@@ -7,6 +7,7 @@
 
 #include <00_Reduce_inl.cuh>
 #include <numeric>
+#include <00_Partition2ShMem.cuh>
 
 
 namespace {
@@ -18,19 +19,15 @@ class ColoringEnv : public testing::Test {
   // should define it if you need to initialize the variables.
   // Otherwise, this can be skipped.
   void SetUp() override {
-    const char* inputMat = def::Mat0;
-    number_of_tiles = 2;
+    const char* inputMat = def::Mat2;
+    number_of_tiles = 12;
 
-    const int m_rows =
-        cpumultiplyDloadMTX(inputMat, &row_ptr, &col_ptr, &val_ptr);
+    m_rows = cpumultiplyDloadMTX(inputMat, &row_ptr, &col_ptr, &val_ptr);
 
     simple_tiling(m_rows, number_of_tiles, row_ptr, col_ptr, &slices_, &ndc_,
                   &offsets_);
     cpumultiplyDpermuteMatrix(number_of_tiles, 1, ndc_, slices_, row_ptr, col_ptr,
                               val_ptr, &row_ptr, &col_ptr, &val_ptr, true);
-
-    uint max_nodes, max_edges;
-    get_MaxTileSize(number_of_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
 
     row_ptr_len = m_rows + 1;
     col_ptr_len = row_ptr[m_rows];
@@ -72,6 +69,7 @@ class ColoringEnv : public testing::Test {
 
   // Declares the variables your tests want to use.
   uint number_of_tiles;
+  int m_rows;
 
   int* row_ptr;
   int* col_ptr;
@@ -93,8 +91,30 @@ class ColoringEnv : public testing::Test {
 // When you have a test fixture, you define a test using TEST_F
 // instead of TEST.
 
+TEST_F(ColoringEnv, FillShmem) {
+
+  uint max_nodes, max_edges;
+  get_MaxTileSize(number_of_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
+    // calc shMem
+  size_t shMem_bytes = (max_nodes+1 + max_edges) * sizeof(int);
+  dim3 gridSize(number_of_tiles);
+  dim3 blockSize(512);
+
+  bool* errors;
+  cudaMallocManaged((void**)&errors, sizeof(bool));
+  *errors = false;
+
+  ShMemLoadTest<<<gridSize, blockSize, shMem_bytes>>>(
+      d_row_ptr, d_col_ptr, d_tile_boundaries,
+      max_nodes, max_edges, errors);
+  cudaDeviceSynchronize();
+
+  EXPECT_FALSE(*errors);
+}
+
 // Tests the default c'tor.
-TEST_F(ColoringEnv, DefaultConstructor) {
+TEST_F(ColoringEnv, CountersReduction) {
+  using namespace red_test;
   // You can access data in the test fixture here.
 
   uint num_Blocks = 2;
@@ -107,11 +127,12 @@ TEST_F(ColoringEnv, DefaultConstructor) {
     }
   }
   Counters sum_c = std::reduce(a.begin(), a.end(), Counters{}, Sum_Counters());
+  Counters max_c = std::reduce(a.begin(), a.end(), Counters{}, Max_Counters());
 
   Counters* d_counters_in;
   Counters* d_counters_out;
   cudaMalloc((void**)&d_counters_in, num_Counters * sizeof(Counters));
-  cudaMalloc((void**)&d_counters_out, num_Blocks * sizeof(Counters));
+  cudaMalloc((void**)&d_counters_out, 2 * num_Blocks * sizeof(Counters));
   cudaMemcpy(d_counters_in, a.data(), num_Counters * sizeof(Counters),
             cudaMemcpyHostToDevice);
 
@@ -122,13 +143,17 @@ TEST_F(ColoringEnv, DefaultConstructor) {
   SingleReduce<<<gridSize, blockSize>>>(d_counters_in, num_Counters, d_counters_out);
   cudaDeviceSynchronize();
 
-  Counters result_of_device;
-  cudaMemcpy(&result_of_device, d_counters_out, sizeof(Counters),
+  Counters d_SumResult;
+  Counters d_MaxResult;
+  cudaMemcpy(&d_SumResult, d_counters_out, sizeof(Counters),
+            cudaMemcpyDeviceToHost);
+  cudaMemcpy(&d_MaxResult, d_counters_out + 1, sizeof(Counters),
             cudaMemcpyDeviceToHost);
 
   for (size_t i = 0; i < max_bitWidth; i++)
   {
-    EXPECT_EQ(sum_c.m[i], result_of_device.m[i]);
+    EXPECT_EQ(sum_c.m[i], d_SumResult.m[i]);
+    EXPECT_EQ(max_c.m[i], d_MaxResult.m[i]);
   }
 }
 

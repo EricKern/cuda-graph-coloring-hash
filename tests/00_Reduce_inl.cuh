@@ -1,10 +1,12 @@
+#pragma once
 #include <coloringCounters.cuh>
 
 #include <cub/cub.cuh>
 #include <cooperative_groups.h>
 namespace cg = cooperative_groups;
 
-__device__ unsigned int retirementCount = 0;
+namespace red_test{
+__device__ unsigned int red_test_retirementCount = 0;
 
 __global__
 void SingleReduce(Counters* in_counters,  // global mem
@@ -48,14 +50,13 @@ void SingleReduce(Counters* in_counters,  // global mem
                                                   Sum_Counters(), block_valid);
   cg::this_thread_block().sync();
 
-  // Counters max_accu = BlockReduce(temp_storage).Reduce(thread_counter,
-  //                                                 Max_Counters(), block_valid);
-  // cg::this_thread_block().sync();
+  Counters max_accu = BlockReduce(temp_storage).Reduce(thread_counter,
+                                                  Max_Counters(), block_valid);
+  cg::this_thread_block().sync();
 
   if(threadIdx.x == 0){
     d_results[blockIdx.x] = sum_accu;
-
-    // d_results[blockIdx.x + gridDim.x] = max_accu;
+    d_results[blockIdx.x + gridDim.x] = max_accu;
   }
 
   __threadfence();
@@ -63,7 +64,7 @@ void SingleReduce(Counters* in_counters,  // global mem
   __shared__ bool amLast;
   // Thread 0 takes a ticket
   if (threadIdx.x == 0) {
-    unsigned int ticket = atomicInc(&retirementCount, gridDim.x);
+    unsigned int ticket = atomicInc(&red_test_retirementCount, gridDim.x);
     // If the ticket ID is equal to the number of blocks, we are the last
     // block!
     amLast = (ticket == gridDim.x - 1);
@@ -79,27 +80,26 @@ void SingleReduce(Counters* in_counters,  // global mem
     // }
   // The last block sums the results of all other blocks
   if (amLast && (threadIdx.x < gridDim.x)) {
-    if((threadIdx.x < gridDim.x)){
-      thread_counter = d_results[threadIdx.x];
-    }
-    // Counters sum_accu = d_results[threadIdx.x];
+    thread_counter = d_results[threadIdx.x];
+
     Counters sum_accu = BlockReduce(temp_storage).Reduce(thread_counter,
                                                          Sum_Counters(),
                                                          gridDim.x);
     cg::this_thread_block().sync();
 
-    // thread_counter = d_results[threadIdx.x + gridDim.x];
-    // Counters max_accu = BlockReduce(temp_storage).Reduce(thread_counter,
-    //                                                      Max_Counters(),
-    //                                                      gridDim.x);
-    // cg::this_thread_block().sync();
+    thread_counter = d_results[threadIdx.x + gridDim.x];
+    Counters max_accu = BlockReduce(temp_storage).Reduce(thread_counter,
+                                                         Max_Counters(),
+                                                         gridDim.x);
+    cg::this_thread_block().sync();
 
     if (threadIdx.x == 0) {
       d_results[0] = sum_accu;
-      // d_results[1] = max_accu;
+      d_results[1] = max_accu;
 
       // reset retirement count so that next run succeeds
-      retirementCount = 0;
+      red_test_retirementCount = 0;
     }
   }
+}
 }
