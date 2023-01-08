@@ -30,12 +30,3 @@ struct Max_Counters {
   }
 };
 
-template <typename T>
-struct brev_cmp {
-  static_assert(std::is_integral_v<T>);
-	__forceinline__ __host__ __device__ bool operator()(T a,
-	                                                    T b) const noexcept {
-		using UT = std::make_unsigned_t<T>;
-		return __brev(static_cast<UT>(a)) < __brev(static_cast<UT>(b));
-	}
-};
