@@ -4,6 +4,8 @@
 #include <coloringCounters.cuh>
 #include <coloring.cuh>
 
+using namespace apa22_coloring;
+
 template <typename IndexType>
 __global__
 void ShMemLoadTest(IndexType* row_ptr,  // global mem

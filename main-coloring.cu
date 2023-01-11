@@ -10,23 +10,23 @@
 
 #include <defines.hpp>
 
-template <bool max = false>
-void printResult(const Counters &res){
-  if (max == false){
+void printResult(const apa22_coloring::Counters& sum,
+                 const apa22_coloring::Counters& max) {
     printf("Total Collisions\n");
-    for (uint i = 0; i < max_bitWidth; ++i) {
-      printf("Mask: %d, Collisions: %d\n", i+1, res.m[i]);
+    const auto start_bw = apa22_coloring::start_bit_width;
+    for (uint i = 0; i < apa22_coloring::max_bit_width; ++i) {
+      printf("Mask width: %d, Collisions: %d\n", i+start_bw, sum.m[i]);
     }
-  } else {
-    printf("Max Collisions per Node\n");
-    for (uint i = 0; i < max_bitWidth; ++i) {
-      printf("Mask: %d, Collisions: %d\n", i+1, res.m[i]);
-    }
-  }
 
+    printf("Max Collisions per Node\n");
+    for (uint i = 0; i < apa22_coloring::max_bit_width; ++i) {
+      printf("Mask width: %d, Collisions: %d\n", i+start_bw, max.m[i]);
+    }
 }
 
 int main() {
+  using namespace apa22_coloring;
+
   const char* inputMat = def::Mat2;
   const uint number_of_tiles = 12;
 
@@ -89,8 +89,7 @@ int main() {
   cudaMemcpy(&max, d_results + 1, 1 * sizeof(Counters),
             cudaMemcpyDeviceToHost);
 
-  printResult(total);
-  printResult<true>(max);
+  printResult(total, max);
 
   cudaFree(d_row_ptr);
   cudaFree(d_col_ptr);

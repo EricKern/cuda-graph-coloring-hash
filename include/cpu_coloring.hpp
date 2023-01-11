@@ -1,6 +1,9 @@
 #pragma once
 #include <coloringCounters.cuh>
 
+namespace apa22_coloring {
+
+
 template <typename IndexType>
 void cpu_dist1(const IndexType* row_ptr,  // global mem
                const IndexType* col_ptr,  // global mem
@@ -27,10 +30,12 @@ void cpu_dist1(const IndexType* row_ptr,  // global mem
       if (col != glob_row) {  // skip connection to node itself
         auto const col_hash = hash(col, static_k_param);
 
-        for (auto bit_w = 1; bit_w <= max_bitWidth; ++bit_w) {
-          std::make_unsigned_t<IndexType> mask = (1u << bit_w) - 1u;
+        for (auto counter_idx = 0; counter_idx < max_bit_width; ++counter_idx) {
+          auto shift_val = start_bit_width + counter_idx;
+          
+          std::make_unsigned_t<IndexType> mask = (1u << shift_val) - 1u;
           if ((row_hash & mask) == (col_hash & mask)) {
-            node_collisions.m[bit_w - 1] += 1;
+            node_collisions.m[counter_idx] += 1;
           } else {
             // if hashes differ in lower bits they also differ when increasing
             // the bit_width
@@ -49,3 +54,5 @@ void cpu_dist1(const IndexType* row_ptr,  // global mem
   *result_total = sum_collisions;
   *result_max = max_collisions;
 }
+
+} // end apa22_coloring

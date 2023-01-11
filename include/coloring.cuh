@@ -15,6 +15,9 @@
 #include <thrust/execution_policy.h>
 #include <cub/cub.cuh>
 
+
+namespace apa22_coloring {
+
 namespace cg = cooperative_groups;
 
 
@@ -97,11 +100,13 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
         continue;
       auto const col_hash = hash(col, static_k_param);
 
-      # pragma unroll max_bitWidth
-      for(auto bit_w = 1; bit_w <= max_bitWidth; ++bit_w){
-        std::make_unsigned_t<IndexType> mask = (1u << bit_w) - 1;
+      # pragma unroll max_bit_width
+      for(auto counter_idx = 0; counter_idx < max_bit_width; ++counter_idx){
+        auto shift_val = start_bit_width + counter_idx;
+
+        std::make_unsigned_t<IndexType> mask = (1u << shift_val) - 1;
         if((row_hash & mask) == (col_hash & mask)){
-          node_collisions.m[bit_w-1] += 1;
+          node_collisions.m[counter_idx] += 1;
         }
         // else if {
         //   // if hashes differ in lower bits they also differ when increasing
@@ -227,9 +232,10 @@ void coloring2Kernel(IndexType* row_ptr,  // global mem
 			             brev_cmp<IndexType>{});
 
 
-      # pragma unroll max_bitWidth
-      for(auto bit_w = 1; bit_w <= max_bitWidth; ++bit_w){
-        std::make_unsigned_t<IndexType> mask = (1u << bit_w) - 1;
+      # pragma unroll max_bit_width
+      for(auto counter_idx = 0; counter_idx <= max_bit_width; ++counter_idx){
+        auto shift_val = start_bit_width + counter_idx;
+        std::make_unsigned_t<IndexType> mask = (1u << shift_val) - 1;
         Counters::value_type max_current = 0;
         Counters::value_type max_so_far = 0;
 
@@ -248,7 +254,7 @@ void coloring2Kernel(IndexType* row_ptr,  // global mem
           }
         }
         max_so_far = (max_current > max_so_far) ? max_current : max_so_far;
-        node_collisions.m[bit_w-1] = max_so_far;
+        node_collisions.m[counter_idx] = max_so_far;
       }
     }
   }
@@ -311,3 +317,5 @@ void coloring2Kernel(IndexType* row_ptr,  // global mem
     }
   }
 }
+
+} // end apa22_coloring

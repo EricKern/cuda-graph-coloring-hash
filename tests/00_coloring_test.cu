@@ -122,9 +122,9 @@ TEST_F(ColoringEnv, CountersReduction) {
   uint num_Counters = 50;
   std::vector<Counters> a(num_Counters);
   for (size_t i = 0; i < num_Counters; i++){
-    for (size_t m_idx = 0; m_idx < max_bitWidth; m_idx++)
+    for (size_t m_idx = 0; m_idx < max_bit_width; m_idx++)
     {
-      a[i].m[m_idx] = i*max_bitWidth + m_idx;
+      a[i].m[m_idx] = i*max_bit_width + m_idx;
     }
   }
   Counters sum_c = std::reduce(a.begin(), a.end(), Counters{}, Sum_Counters());
@@ -151,7 +151,7 @@ TEST_F(ColoringEnv, CountersReduction) {
   cudaMemcpy(&d_MaxResult, d_counters_out + 1, sizeof(Counters),
             cudaMemcpyDeviceToHost);
 
-  for (size_t i = 0; i < max_bitWidth; i++)
+  for (size_t i = 0; i < max_bit_width; i++)
   {
     EXPECT_EQ(sum_c.m[i], d_SumResult.m[i]);
     EXPECT_EQ(max_c.m[i], d_MaxResult.m[i]);
@@ -188,7 +188,7 @@ TEST_F(ColoringEnv, CPU_Comparison) {
   Counters cpu_max, cpu_total;
   cpu_dist1(row_ptr, col_ptr, m_rows, &cpu_total, &cpu_max);
 
-  for (int i = 0; i < max_bitWidth; ++i){
+  for (int i = 0; i < max_bit_width; ++i){
     EXPECT_EQ(cpu_total.m[i], gpu_total.m[i]);
     EXPECT_EQ(cpu_max.m[i], gpu_max.m[i]);
   }

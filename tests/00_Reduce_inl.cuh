@@ -6,6 +6,8 @@
 namespace cg = cooperative_groups;
 
 namespace red_test{
+  using namespace apa22_coloring;
+  
 __device__ unsigned int red_test_retirementCount = 0;
 
 __global__

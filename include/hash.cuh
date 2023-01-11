@@ -1,6 +1,9 @@
 #pragma once
 #include <cstdint>
 
+
+namespace apa22_coloring {
+
 static constexpr int static_k_param{7};
 
 template <typename IndexType>
@@ -22,3 +25,5 @@ struct brev_cmp {
     }
   }
 };
+
+} // end apa22_coloring

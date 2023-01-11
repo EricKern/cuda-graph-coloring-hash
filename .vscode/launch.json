@@ -5,17 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
+            // doesn't work during live share session
             "name": "CUDA C++: Launch",
             "type": "cuda-gdb",
             "request": "launch",
-            "program": "/home/eric/Documents/graph-coloring/dbg-build/example",
+            "program": "${workspaceFolder}/dbg-build/main-coloring.out",
             "args": "/home/eric/Documents/graph-coloring/cage3.mtx 2",
             "preLaunchTask": "mk"
-        },
-        {
-            "name": "CUDA C++: Attach",
-            "type": "cuda-gdb",
-            "request": "attach"
         }
     ]
 }
