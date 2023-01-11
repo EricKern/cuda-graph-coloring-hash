@@ -4,7 +4,7 @@
 static constexpr int static_k_param{7};
 
 template <typename IndexType>
-__forceinline__ __device__ std::uint32_t hash(IndexType val,
+__forceinline__ __host__ __device__ std::uint32_t hash(IndexType val,
                                               int k_param) noexcept {
   auto const uval = static_cast<std::make_unsigned_t<IndexType>>(val);
   auto const divisor = (1u << k_param) - 1u;
@@ -13,13 +13,12 @@ __forceinline__ __device__ std::uint32_t hash(IndexType val,
 
 template <typename T>
 struct brev_cmp {
-  static_assert(std::is_integral_v<T>);
+  static_assert(std::is_unsigned_v<T>);
   __forceinline__ __device__ bool operator()(T a, T b) const noexcept {
-    using UT = std::make_unsigned_t<T>;
-    if constexpr (sizeof(UT) > 4) {
-      return __brevll(static_cast<UT>(a)) < __brevll(static_cast<UT>(b));
+    if constexpr (sizeof(T) > 4) {
+      return __brevll(a) < __brevll(b);
     } else {
-      return __brev(static_cast<UT>(a)) < __brev(static_cast<UT>(b));
+      return __brev(a) < __brev(b);
     }
   }
 };

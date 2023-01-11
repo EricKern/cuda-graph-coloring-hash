@@ -9,6 +9,7 @@
 #include <numeric>
 #include <00_Partition2ShMem.cuh>
 
+#include <cpu_coloring.hpp>
 
 namespace {
 // To use a test fixture, derive a class from testing::Test.
@@ -20,7 +21,7 @@ class ColoringEnv : public testing::Test {
   // Otherwise, this can be skipped.
   void SetUp() override {
     const char* inputMat = def::Mat2;
-    number_of_tiles = 12;
+    number_of_tiles = 24;
 
     m_rows = cpumultiplyDloadMTX(inputMat, &row_ptr, &col_ptr, &val_ptr);
 
@@ -155,6 +156,45 @@ TEST_F(ColoringEnv, CountersReduction) {
     EXPECT_EQ(sum_c.m[i], d_SumResult.m[i]);
     EXPECT_EQ(max_c.m[i], d_MaxResult.m[i]);
   }
+}
+
+
+TEST_F(ColoringEnv, CPU_Comparison) {
+  uint max_nodes, max_edges;
+  get_MaxTileSize(number_of_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
+  
+  // calc shMem
+  size_t shMem_bytes = (max_nodes+1 + max_edges) * sizeof(int);
+  dim3 gridSize(number_of_tiles);
+  dim3 blockSize(512);
+
+  Counters* d_results;
+  cudaMalloc((void**)&d_results, number_of_tiles * 2 *sizeof(Counters));
+
+  // run GPU version
+  coloring1Kernel<<<gridSize, blockSize, shMem_bytes>>>(
+      d_row_ptr, d_col_ptr, d_tile_boundaries, d_intra_tile_sep, m_rows,
+      max_nodes, max_edges, d_results);
+  cudaDeviceSynchronize();
+
+  Counters gpu_total;
+  cudaMemcpy(&gpu_total, d_results, 1 * sizeof(Counters),
+            cudaMemcpyDeviceToHost);
+  Counters gpu_max;
+  cudaMemcpy(&gpu_max, d_results + 1, 1 * sizeof(Counters),
+            cudaMemcpyDeviceToHost);
+
+
+  Counters cpu_max, cpu_total;
+  cpu_dist1(row_ptr, col_ptr, m_rows, &cpu_total, &cpu_max);
+
+  for (int i = 0; i < max_bitWidth; ++i){
+    EXPECT_EQ(cpu_total.m[i], gpu_total.m[i]);
+    EXPECT_EQ(cpu_max.m[i], gpu_max.m[i]);
+  }
+  
+
+  cudaFree(d_results);
 }
 
 }  // namespace
