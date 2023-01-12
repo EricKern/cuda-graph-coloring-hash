@@ -10,8 +10,23 @@
 #include <00_Partition2ShMem.cuh>
 
 #include <cpu_coloring.hpp>
+#include <cpu_coloring_thrust.cuh>
 
 namespace {
+void printResult(const apa22_coloring::Counters& sum,
+                 const apa22_coloring::Counters& max) {
+  printf("Total Collisions\n");
+  const auto start_bw = apa22_coloring::start_bit_width;
+  for (uint i = 0; i < apa22_coloring::max_bit_width; ++i) {
+    printf("Mask width: %d, Collisions: %d\n", i+start_bw, sum.m[i]);
+  }
+
+  printf("Max Collisions per Node\n");
+  for (uint i = 0; i < apa22_coloring::max_bit_width; ++i) {
+    printf("Mask width: %d, Collisions: %d\n", i+start_bw, max.m[i]);
+  }
+}
+
 // To use a test fixture, derive a class from testing::Test.
 class ColoringEnv : public testing::Test {
  protected:  // You should make the members protected s.t. they can be
@@ -195,6 +210,33 @@ TEST_F(ColoringEnv, CPU_Comparison) {
   
 
   cudaFree(d_results);
+}
+
+TEST_F(ColoringEnv, CPU_vs_CPU_Dist2) {
+  uint max_nodes, max_edges;
+  get_MaxTileSize(number_of_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
+
+  auto redBinaryOp = [](auto lhs, auto rhs){return rhs > lhs ? rhs : lhs;};
+  auto transBinaryOp = [](auto lhs, auto rhs){return rhs - lhs;};
+  int max_node_degree = std::transform_reduce(row_ptr,
+                                              row_ptr + m_rows,
+                                              row_ptr + 1,
+                                              0,
+                                              redBinaryOp,
+                                              transBinaryOp);
+
+  Counters cpu_max, cpu_total;
+  cpuDist2(row_ptr, col_ptr, m_rows, max_node_degree, &cpu_total, &cpu_max);
+
+  Counters cpu_thrust_max, cpu_thrust_total;
+  cpuDist2Thrust(row_ptr, col_ptr, m_rows, max_node_degree, &cpu_thrust_total, &cpu_thrust_max);
+
+  // printResult(cpu_total, cpu_max);
+  // printResult(cpu_thrust_total, cpu_thrust_max);
+  for (int i = 0; i < max_bit_width; ++i){
+    EXPECT_EQ(cpu_total.m[i], cpu_thrust_total.m[i]);
+    EXPECT_EQ(cpu_max.m[i], cpu_thrust_max.m[i]);
+  }
 }
 
 }  // namespace
