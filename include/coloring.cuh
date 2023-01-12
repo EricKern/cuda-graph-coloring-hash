@@ -233,7 +233,7 @@ void coloring2Kernel(IndexType* row_ptr,  // global mem
 
 
       # pragma unroll max_bit_width
-      for(auto counter_idx = 0; counter_idx <= max_bit_width; ++counter_idx){
+      for(auto counter_idx = 0; counter_idx < max_bit_width; ++counter_idx){
         auto shift_val = start_bit_width + counter_idx;
         std::make_unsigned_t<IndexType> mask = (1u << shift_val) - 1;
         Counters::value_type max_current = 0;
