@@ -36,7 +36,7 @@ class ColoringEnv : public testing::Test {
   // Otherwise, this can be skipped.
   void SetUp() override {
     const char* inputMat = def::Mat2;
-    number_of_tiles = 24;
+    number_of_tiles = 12;
 
     m_rows = cpumultiplyDloadMTX(inputMat, &row_ptr, &col_ptr, &val_ptr);
 
@@ -181,7 +181,7 @@ TEST_F(ColoringEnv, CPU_Comparison) {
   // calc shMem
   size_t shMem_bytes = (max_nodes+1 + max_edges) * sizeof(int);
   dim3 gridSize(number_of_tiles);
-  dim3 blockSize(512);
+  dim3 blockSize(THREADS);
 
   Counters* d_results;
   cudaMalloc((void**)&d_results, number_of_tiles * 2 *sizeof(Counters));

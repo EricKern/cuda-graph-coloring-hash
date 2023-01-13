@@ -15,7 +15,7 @@ namespace apa22_coloring
 template <typename T>
 struct Mask {
   int mask_width;
-	static_assert(std::is_unsigned_v<T>);
+	static_assert(std::is_unsigned_v<T>);   // assuming we only get hashes
 	__forceinline__ __host__ T operator()(T a) const noexcept {
 		T mask = (1u << mask_width) - 1u;
     return a & mask;

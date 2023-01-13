@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 
+static constexpr int THREADS = 512;
+
 namespace apa22_coloring {
 
   static constexpr int max_bit_width{14};

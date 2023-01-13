@@ -76,7 +76,9 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
 
   // thread local array to count collisions
-  Counters node_collisions;
+  Counters current_collisions;
+  Counters total_collisions;
+  Counters max_collisions;
   
 
   // Global mem access in tile_boundaries !!!!!
@@ -106,7 +108,7 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
 
         std::make_unsigned_t<IndexType> mask = (1u << shift_val) - 1;
         if((row_hash & mask) == (col_hash & mask)){
-          node_collisions.m[counter_idx] += 1;
+          current_collisions.m[counter_idx] += 1;
         }
         // else if {
         //   // if hashes differ in lower bits they also differ when increasing
@@ -115,6 +117,11 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
         // }
       }
     }
+    Sum_Counters sum;
+    Max_Counters max;
+    total_collisions = sum(current_collisions, total_collisions);
+    max_collisions = max(current_collisions, max_collisions);
+    current_collisions = Counters{};
   }
 
   cg::this_thread_block().sync();
@@ -122,17 +129,17 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
   // and we can do sum and max reduction for desired output
 
   // // template BlockDim is bad
-  typedef cub::BlockReduce<Counters, 512> BlockReduce;
+  typedef cub::BlockReduce<Counters, THREADS> BlockReduce;
   using TempStorageT = typename BlockReduce::TempStorage;
 
-  // TempStorageT temp_storage = reinterpret_cast<TempStorageT&>(shMem);
+  // TempStorageT temp_storage = *reinterpret_cast<TempStorageT*>(shMem);
   __shared__ TempStorageT temp_storage;
 
-  Counters sum_accu = BlockReduce(temp_storage).Reduce(node_collisions,
+  Counters sum_accu = BlockReduce(temp_storage).Reduce(total_collisions,
                                                   Sum_Counters(), n_tileNodes);
   cg::this_thread_block().sync();
 
-  Counters max_accu = BlockReduce(temp_storage).Reduce(node_collisions,
+  Counters max_accu = BlockReduce(temp_storage).Reduce(max_collisions,
                                                   Max_Counters(), n_tileNodes);
   cg::this_thread_block().sync();
 
@@ -155,16 +162,46 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
   cg::this_thread_block().sync();
 
   // The last block sums the results of all other blocks
-  if (amLast && (threadIdx.x < gridDim.x)) {
+  if (amLast) {
 
-    // Counters sum_accu = d_results[threadIdx.x];
-  Counters sum_accu = BlockReduce(temp_storage).Reduce(d_results[threadIdx.x],
-                                                  Sum_Counters(), gridDim.x);
-  cg::this_thread_block().sync();
+    Counters sum_accu;
+    Counters max_accu;
+    
+    uint div = gridDim.x / blockDim.x;
+    uint rem = gridDim.x % blockDim.x;
+    uint block_valid;
 
-  Counters max_accu = BlockReduce(temp_storage).Reduce(d_results[threadIdx.x + gridDim.x],
-                                                  Max_Counters(), gridDim.x);
-  cg::this_thread_block().sync();
+    if (threadIdx.x == 0) {
+      sum_accu = d_results[threadIdx.x];
+      max_accu = d_results[threadIdx.x + gridDim.x];
+    }
+
+    int num_iters = rem == 0 ? div : div + 1;
+    // complicated for loop in case we have more blocks than threads
+    for (uint nr_reduction = 0; nr_reduction < num_iters; ++nr_reduction){
+      if(nr_reduction < div){
+        block_valid = blockDim.x;
+      } else if (nr_reduction == div){
+        block_valid = rem;
+      } else {
+        block_valid = 0;
+      }
+
+      // evlt. <=
+      if (threadIdx.x != 0 && threadIdx.x < block_valid) {
+        sum_accu = d_results[threadIdx.x + nr_reduction * (blockDim.x - 1)];
+        max_accu = d_results[threadIdx.x + gridDim.x + nr_reduction * (blockDim.x - 1)];
+      }
+
+      sum_accu = BlockReduce(temp_storage).Reduce(sum_accu,
+                                                      Sum_Counters(), block_valid);
+      cg::this_thread_block().sync();
+
+      max_accu = BlockReduce(temp_storage).Reduce(max_accu,
+                                                      Max_Counters(), block_valid);
+      cg::this_thread_block().sync();
+      
+    }
 
     if (threadIdx.x == 0) {
       d_results[0] = sum_accu;
@@ -264,7 +301,7 @@ void coloring2Kernel(IndexType* row_ptr,  // global mem
   // and we can do sum and max reduction for desired output
 
   // // template BlockDim is bad
-  typedef cub::BlockReduce<Counters, 512> BlockReduce;
+  typedef cub::BlockReduce<Counters, THREADS> BlockReduce;
   using TempStorageT = typename BlockReduce::TempStorage;
 
   // TempStorageT temp_storage = reinterpret_cast<TempStorageT&>(shMem);
