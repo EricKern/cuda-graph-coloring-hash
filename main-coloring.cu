@@ -94,6 +94,7 @@ int main() {
   printf("Pre Kernel");
   std::cout << std::endl;
 
+  // cudaFuncSetAttribute(coloring1Kernel<int>, cudaFuncAttributeMaxDynamicSharedMemorySize, 98304);
   coloring1Kernel<<<gridSize, blockSize, shMem_bytes>>>(
       d_row_ptr, d_col_ptr, d_tile_boundaries, m_rows,
       max_nodes, max_edges, d_results);

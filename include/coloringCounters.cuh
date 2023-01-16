@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-static constexpr int THREADS = 864;
+static constexpr int THREADS = 512;
 
 namespace apa22_coloring {
 
