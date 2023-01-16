@@ -167,14 +167,14 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
     Counters sum_accu;
     Counters max_accu;
     
-    uint div = gridDim.x / blockDim.x;
-    uint rem = gridDim.x % blockDim.x;
+    uint div = gridDim.x / (blockDim.x - 1);
+    uint rem = gridDim.x % (blockDim.x - 1);
     uint block_valid;
 
-    if (threadIdx.x == 0) {
-      sum_accu = d_results[threadIdx.x];
-      max_accu = d_results[threadIdx.x + gridDim.x];
-    }
+    // if (threadIdx.x == 0) {
+    //   sum_accu = d_results[threadIdx.x];
+    //   max_accu = d_results[threadIdx.x + gridDim.x];
+    // }
 
     int num_iters = rem == 0 ? div : div + 1;
     // complicated for loop in case we have more blocks than threads
@@ -188,17 +188,18 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
       }
 
       // evlt. <=
-      if (threadIdx.x != 0 && threadIdx.x < block_valid) {
-        sum_accu = d_results[threadIdx.x + nr_reduction * (blockDim.x - 1)];
-        max_accu = d_results[threadIdx.x + gridDim.x + nr_reduction * (blockDim.x - 1)];
+      int local_tid = threadIdx.x - 1;
+      if (threadIdx.x != 0 && local_tid < block_valid) {
+        sum_accu = d_results[local_tid + nr_reduction * (blockDim.x - 1)];
+        max_accu = d_results[local_tid + gridDim.x + nr_reduction * (blockDim.x - 1)];
       }
 
       sum_accu = BlockReduce(temp_storage).Reduce(sum_accu,
-                                                      Sum_Counters(), block_valid);
+                                                      Sum_Counters(), block_valid + 1);
       cg::this_thread_block().sync();
 
       max_accu = BlockReduce(temp_storage).Reduce(max_accu,
-                                                      Max_Counters(), block_valid);
+                                                      Max_Counters(), block_valid + 1);
       cg::this_thread_block().sync();
       
     }

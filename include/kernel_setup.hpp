@@ -29,7 +29,7 @@ void kernel_setup(const char* inputMat,
   static constexpr auto reduction_shmem = 100 + sizeof(typename cub::BlockReduce<Counters, THREADS, cub::BLOCK_REDUCE_WARP_REDUCTIONS, 1, 1, 750>::TempStorage);
 
 //   static constexpr int reduction_shmem = sizeof(BlockReduce::TempStorage);
-  static constexpr int max_shmem = 48 * 1024 - reduction_shmem;
+  static constexpr int max_shmem = 24 * 1024 - reduction_shmem;
   static constexpr int shmem_lim = distance2 ? max_shmem / 2 : max_shmem;
   std::cout << "SHmem cub" << reduction_shmem << std::endl;
   // if (distance2) constexpr {
