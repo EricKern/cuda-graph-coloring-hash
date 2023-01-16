@@ -71,7 +71,6 @@ int main() {
   cudaMalloc((void**)&d_row_ptr, row_ptr_len * sizeof(int));
   cudaMalloc((void**)&d_col_ptr, col_ptr_len * sizeof(int));
   cudaMalloc((void**)&d_tile_boundaries, tile_bound_len * sizeof(int));
-  cudaMalloc((void**)&d_intra_tile_sep, intra_tile_sep_len * sizeof(int));
 
 
   cudaMemcpy(d_row_ptr, row_ptr, row_ptr_len * sizeof(int),
@@ -96,7 +95,7 @@ int main() {
   std::cout << std::endl;
 
   coloring1Kernel<<<gridSize, blockSize, shMem_bytes>>>(
-      d_row_ptr, d_col_ptr, d_tile_boundaries, d_intra_tile_sep, m_rows,
+      d_row_ptr, d_col_ptr, d_tile_boundaries, m_rows,
       max_nodes, max_edges, d_results);
   cudaDeviceSynchronize();
 

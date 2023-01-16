@@ -62,7 +62,6 @@ __global__
 void coloring1Kernel(IndexType* row_ptr,  // global mem
                      IndexType* col_ptr,  // global mem
                      IndexType* tile_boundaries,
-                     IndexType* intra_tile_sep,   // <- useless (?)
                      uint m_rows,
                      uint tile_max_nodes,
                      uint tile_max_edges,
@@ -164,8 +163,8 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
   // The last block sums the results of all other blocks
   if (amLast) {
 
-    Counters sum_accu;
-    Counters max_accu;
+    sum_accu = Counters{};
+    max_accu = Counters{};
     
     uint div = gridDim.x / (blockDim.x - 1);
     uint rem = gridDim.x % (blockDim.x - 1);
@@ -191,17 +190,30 @@ void coloring1Kernel(IndexType* row_ptr,  // global mem
       int local_tid = threadIdx.x - 1;
       if (threadIdx.x != 0 && local_tid < block_valid) {
         sum_accu = d_results[local_tid + nr_reduction * (blockDim.x - 1)];
-        max_accu = d_results[local_tid + gridDim.x + nr_reduction * (blockDim.x - 1)];
       }
 
       sum_accu = BlockReduce(temp_storage).Reduce(sum_accu,
                                                       Sum_Counters(), block_valid + 1);
       cg::this_thread_block().sync();
+    }
+
+    for (uint nr_reduction = 0; nr_reduction < num_iters; ++nr_reduction){
+      if(nr_reduction < div){
+        block_valid = blockDim.x;
+      } else if (nr_reduction == div){
+        block_valid = rem;
+      } else {
+        block_valid = 0;
+      }
+      // evlt. <=
+      int local_tid = threadIdx.x - 1;
+      if (threadIdx.x != 0 && local_tid < block_valid) {
+        max_accu = d_results[local_tid + gridDim.x + nr_reduction * (blockDim.x - 1)];
+      }
 
       max_accu = BlockReduce(temp_storage).Reduce(max_accu,
                                                       Max_Counters(), block_valid + 1);
       cg::this_thread_block().sync();
-      
     }
 
     if (threadIdx.x == 0) {
