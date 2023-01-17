@@ -6,7 +6,7 @@
         {
             "label": "mk",
             "type": "shell",
-            "command": "make -C dbg-build",
+            "command": "make -C rls-build",
             "presentation": {
                 "echo": true,
                 "reveal": "always",
@@ -14,9 +14,13 @@
                 "panel": "shared",
                 "showReuseMessage": true,
                 "clear": false,
-                "close": true
+                "close": false
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
             }
-
         }
     ]
 }

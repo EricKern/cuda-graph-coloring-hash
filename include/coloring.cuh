@@ -9,6 +9,7 @@
 //    intra-tile node in each partition.
 #include <cooperative_groups.h>
 #include <hash.cuh>
+#include <cstdint>    // for mask
 #include <coloringCounters.cuh>
 
 #include <thrust/sort.h>
@@ -21,30 +22,30 @@ namespace apa22_coloring {
 namespace cg = cooperative_groups;
 
 
-template <typename IndexType>
+template <typename IndexT>
 __forceinline__ __device__
-void Partition2ShMem(IndexType* shMemRows,
-                     IndexType* shMemCols,
-                     IndexType* row_ptr,  // global mem
-                     IndexType* col_ptr,  // global mem
-                     IndexType* tile_boundaries){
-  // determine which tile to load with blockId
-  uint partNr = blockIdx.x;
+void Partition2ShMem(IndexT* shMemRows,
+                     IndexT* shMemCols,
+                     IndexT* row_ptr,     // global mem
+                     IndexT* col_ptr,     // global mem
+                     IndexT* tile_boundaries) {
+  // Determine which tile to load with blockId
+  int part_nr = blockIdx.x;
 
-  uint partSize = tile_boundaries[partNr+1] - tile_boundaries[partNr] + 1;
+  int part_size = tile_boundaries[part_nr+1] - tile_boundaries[part_nr] + 1;
   // +1 to load one additional row_ptr value to determine size of last row
 
-  uint part_offset = tile_boundaries[partNr];   // offset in row_ptr array
+  IndexT part_offset = tile_boundaries[part_nr];   // offset in row_ptr array
   // put row_ptr partition in shMem
-  for (uint i = threadIdx.x; i < partSize; i += blockDim.x){
+  for (int i = threadIdx.x; i < part_size; i += blockDim.x) {
     shMemRows[i] = row_ptr[i + part_offset];
   }
 
   cg::this_thread_block().sync();
 
-  uint num_cols = shMemRows[partSize-1] - shMemRows[0];
-  uint col_offset = shMemRows[0];
-  for (uint i = threadIdx.x; i < num_cols; i += blockDim.x){
+  int num_cols = shMemRows[part_size-1] - shMemRows[0];
+  IndexT col_offset = shMemRows[0];
+  for (int i = threadIdx.x; i < num_cols; i += blockDim.x) {
     shMemCols[i] = col_ptr[i + col_offset];
   }
 
@@ -54,85 +55,93 @@ void Partition2ShMem(IndexType* shMemRows,
   // n nodes
 }
 
-
-__device__ unsigned int retirementCount = 0;
-
-template <typename IndexType>
-__global__
-void coloring1Kernel(IndexType* row_ptr,  // global mem
-                     IndexType* col_ptr,  // global mem
-                     IndexType* tile_boundaries,
-                     uint m_rows,
-                     uint tile_max_nodes,
-                     uint tile_max_edges,
-                     Counters* d_results){
-  //uint number_of_tiles = gridDim.x;
-
-  extern __shared__ IndexType shMem[];
-  IndexType* shMemRows = shMem;                      // tile_max_nodes +1 elements
-  IndexType* shMemCols = &shMemRows[tile_max_nodes+1]; // tile_max_edges elements
-  
-  Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
-
-  // thread local array to count collisions
+template <typename IndexT>
+__forceinline__ __device__
+void D1CollisionsLocal(IndexT* shMemRows,
+                       IndexT* shMemCols,
+                       IndexT* tile_boundaries,
+                       Counters& total,
+                       Counters& max) {
   Counters current_collisions;
-  Counters total_collisions;
-  Counters max_collisions;
-  
-
   // Global mem access in tile_boundaries !!!!!
-  uint partNr = blockIdx.x;
-  IndexType n_tileNodes = tile_boundaries[partNr+1]
-                          - tile_boundaries[partNr];
+  const int part_nr = blockIdx.x;
+  const int n_tileNodes = tile_boundaries[part_nr+1] - tile_boundaries[part_nr];
 
   // for distance 1 we don't have to distinguish between intra tile nodes and
   // border nodes
-  for (uint i = threadIdx.x; i < n_tileNodes; i += blockDim.x){
-    auto const glob_row = tile_boundaries[partNr] + i;
-    auto const row_begin = shMemRows[i];
-		auto const row_end = shMemRows[i + 1];
+  for (int i = threadIdx.x; i < n_tileNodes; i += blockDim.x) {
+    IndexT glob_row = tile_boundaries[part_nr] + i;
+    IndexT row_begin = shMemRows[i];
+		IndexT row_end = shMemRows[i + 1];
 
-    auto const row_hash = hash(glob_row, static_k_param);
+    const auto row_hash = hash(glob_row, static_k_param);
     
-    for (auto col_idx = row_begin; col_idx < row_end; ++col_idx) {
-      auto const col = shMemCols[col_idx - shMemRows[0]];
+    for (IndexT col_idx = row_begin; col_idx < row_end; ++col_idx) {
+      IndexT col = shMemCols[col_idx - shMemRows[0]];
       // col_idx - shMemRows[0] transforms global col_idx to shMem index
-      if(col == glob_row)
-        continue;
-      auto const col_hash = hash(col, static_k_param);
+      if (col != glob_row) {
+        const auto col_hash = hash(col, static_k_param);
 
-      # pragma unroll max_bit_width
-      for(auto counter_idx = 0; counter_idx < max_bit_width; ++counter_idx){
-        auto shift_val = start_bit_width + counter_idx;
+        # pragma unroll max_bit_width
+        for (int counter_idx = 0; counter_idx < max_bit_width; ++counter_idx) {
+          int shift_val = start_bit_width + counter_idx;
 
-        std::make_unsigned_t<IndexType> mask = (1u << shift_val) - 1;
-        if((row_hash & mask) == (col_hash & mask)){
-          current_collisions.m[counter_idx] += 1;
+          std::uint32_t mask = (1u << shift_val) - 1u;
+          if ((row_hash & mask) == (col_hash & mask)) {
+            current_collisions.m[counter_idx] += 1;
+          }
+          // else if {
+          //   // if hashes differ in lower bits they also differ when increasing
+          //   // the bit_width
+          //   break;
+          // }
         }
-        // else if {
-        //   // if hashes differ in lower bits they also differ when increasing
-        //   // the bit_width
-        //   break;
-        // }
       }
     }
-    Sum_Counters sum;
-    Max_Counters max;
-    total_collisions = sum(current_collisions, total_collisions);
-    max_collisions = max(current_collisions, max_collisions);
+    Sum_Counters sum_ftor;
+    Max_Counters max_ftor;
+    total = sum_ftor(current_collisions, total);
+    max = max_ftor(current_collisions, max);
     current_collisions = Counters{};
   }
 
   cg::this_thread_block().sync();
+}
+
+__device__ unsigned int retirementCount = 0;
+
+template <typename IndexT>
+__global__
+void coloring1Kernel(IndexT* row_ptr,  // global mem
+                     IndexT* col_ptr,  // global mem
+                     IndexT* tile_boundaries,
+                     int tile_max_nodes,
+                     int tile_max_edges,
+                     Counters* d_results){
+  const IndexT partNr = blockIdx.x;
+
+  extern __shared__ IndexT shMem[];
+  IndexT* shMemRows = shMem;                      // tile_max_nodes +1 elements
+  IndexT* shMemCols = &shMemRows[tile_max_nodes+1]; // tile_max_edges elements
+  
+  Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
+
+  // thread local array to count collisions
+  
+  Counters total_collisions;
+  Counters max_collisions;
+  
+  D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, total_collisions, max_collisions);
+  
   // Now each thread has counted all local collisions
   // and we can do sum and max reduction for desired output
 
   // // template BlockDim is bad
-  typedef cub::BlockReduce<Counters, THREADS> BlockReduce;
+  using BlockReduce = cub::BlockReduce<Counters, THREADS>;
   using TempStorageT = typename BlockReduce::TempStorage;
 
-  // TempStorageT temp_storage = *reinterpret_cast<TempStorageT*>(shMem);
-  __shared__ TempStorageT temp_storage;
+  auto& temp_storage = reinterpret_cast<TempStorageT&>(shMem);
+  IndexT n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
   Counters sum_accu = BlockReduce(temp_storage).Reduce(total_collisions,
                                                   Sum_Counters(), n_tileNodes);

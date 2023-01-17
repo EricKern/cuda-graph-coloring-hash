@@ -188,7 +188,7 @@ TEST_F(ColoringEnv, CPU_Comparison) {
 
   // run GPU version
   coloring1Kernel<<<gridSize, blockSize, shMem_bytes>>>(
-      d_row_ptr, d_col_ptr, d_tile_boundaries, m_rows,
+      d_row_ptr, d_col_ptr, d_tile_boundaries,
       max_nodes, max_edges, d_results);
   cudaDeviceSynchronize();
 
