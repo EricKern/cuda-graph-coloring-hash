@@ -127,11 +127,11 @@ int main(int argc, char const *argv[]) {
   printf("Post Kernel");
   std::cout << std::endl;
 
-  Counters* total = new Counters[hash_params.len];
-  cudaMemcpy(total, d_total, hash_params.len * sizeof(Counters),
+  std::unique_ptr<Counters[]> total(new Counters[hash_params.len]);
+  std::unique_ptr<Counters[]> max(new Counters[hash_params.len]);
+  cudaMemcpy(total.get(), d_total, hash_params.len * sizeof(Counters),
              cudaMemcpyDeviceToHost);
-  Counters* max = new Counters[hash_params.len];
-  cudaMemcpy(max, d_max, hash_params.len * sizeof(Counters),
+  cudaMemcpy(max.get(), d_max, hash_params.len * sizeof(Counters),
              cudaMemcpyDeviceToHost);
 
   printResult(total[0], max[0]);
@@ -141,6 +141,16 @@ int main(int argc, char const *argv[]) {
   
   printf("CPU results");
   printResult(cpu_total, cpu_max);
+
+  cudaFree(d_total);
+  cudaFree(d_max);
+
+  for (int i = 0; i < hash_params.len; ++i) {
+    cudaFree(h_soa_total.m[i]);
+    cudaFree(h_soa_max.m[i]);
+  }
+  cudaFree(d_soa_total);
+  cudaFree(d_soa_max);
 
   cudaFree(d_row_ptr);
   cudaFree(d_col_ptr);
