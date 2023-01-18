@@ -18,7 +18,7 @@
 - andere hashfunktionen mit testen
     - Done. Aber Cpu-Coloring versionen sollte man noch zusätzlichen int Parameter geben mit welcher Hash funktion gerechnet werden soll.
     - Unittest muss man wieder zum laufen bringen mit neuer GPU und CPU version.
-- Kernel nur Daten laden + schreiben -> nvbench -> Daniel
+- Kernel nur Daten laden + schreiben -> nvbench -> Daniel -> erledigt
 - Aufräumen Dist1 + kernel setup
     - Dist1 ist finde ich clean. GoogleStyleGuide vielleicht nicht immer eingehalten, aber ok.
     - Kernel-Setup ist wieder schlecht. ShMem kann man nicht wiederverwenden wenn man mehrere HashFunktionen

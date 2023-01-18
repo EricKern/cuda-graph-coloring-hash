@@ -25,6 +25,8 @@ enable_testing()
 add_subdirectory(tests)
 # google test end =======================================
 
+find_package(nvbench)
+
 
 add_subdirectory(tiling)
 add_subdirectory(cpumultiply)
@@ -36,3 +38,10 @@ target_compile_options(${Target1Name} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPI
 target_include_directories(${Target1Name} PRIVATE "${PROJECT_SOURCE_DIR}/include")
 target_compile_features(${Target1Name} PRIVATE cuda_std_17)
 target_link_libraries(${Target1Name} PRIVATE cusparse tiling cpumultiply)
+
+set(BenchTarget benchmark.out)
+add_executable(${BenchTarget} benchmark/benchmark.cu)
+target_compile_options(${BenchTarget} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;-maxrregcount=64>")
+target_include_directories(${BenchTarget} PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_link_libraries(${BenchTarget} PRIVATE tiling cpumultiply nvbench::main)
+set_target_properties(${BenchTarget} PROPERTIES COMPILE_FEATURES cuda_std_17)
