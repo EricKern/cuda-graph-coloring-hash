@@ -119,6 +119,29 @@ int BlockLoadThreadReduce(int* g_addr, int num_elem, ReductionOp red_op) {
   return sum;
 }
 
+template <typename CubReduceT,
+          typename ReductionOp>
+__forceinline__ __device__
+void D1LastReduction(SOACounters* soa, Counters* out_counters, ReductionOp op,
+                     typename CubReduceT::TempStorage& temp_storage) {
+  int num_valid = cub::min(blockDim.x, gridDim.x);
+  // Initial reduction during load in BlockLoadThreadReduce limits thread
+  // local results to at most blockDim.x
+
+  // Last block reduction
+  for (int k = 0; k < hash_params.len; ++k) {
+    for (int i = 0; i < num_bit_widths; ++i) {
+      int* start_addr = soa->m[k] + i * gridDim.x;
+      int accu = BlockLoadThreadReduce(start_addr, gridDim.x, op);
+      accu = CubReduceT(temp_storage).Reduce(accu, op, num_valid);
+      cg::this_thread_block().sync();
+      if (threadIdx.x == 0) {
+        out_counters[k].m[i] = accu;
+      }
+    }
+  }
+}
+
 __device__ unsigned int retirementCount = 0;
 
 template <typename IndexT>
@@ -189,34 +212,10 @@ void coloring1Kernel(IndexT* row_ptr,  // global mem
 
   // The last block sums the results of all other blocks
   if (amLast) {
-    int num_valid = cub::min(blockDim.x, gridDim.x);
-
     // Last block sum
-    for (int k = 0; k < hash_params.len; ++k) {
-      for (int i = 0; i < num_bit_widths; ++i) {
-        int* start_addr = soa_total->m[k] + i * gridDim.x;
-        int total_l2 = BlockLoadThreadReduce(start_addr, gridDim.x, cub::Sum{});
-        total_l2 =
-            BlockReduceT(temp_storage).Reduce(total_l2, cub::Sum{}, num_valid);
-        cg::this_thread_block().sync();
-        if (threadIdx.x == 0) {
-          d_total[k].m[i] = total_l2;
-        }
-      }
-    }
+    D1LastReduction<BlockReduceT>(soa_total, d_total, cub::Sum{}, temp_storage);
     // Last block max
-    for (int k = 0; k < hash_params.len; ++k) {
-      for (int i = 0; i < num_bit_widths; ++i) {
-        int* start_addr = soa_max->m[k] + i * gridDim.x;
-        int max_l2 = BlockLoadThreadReduce(start_addr, gridDim.x, cub::Max{});
-        max_l2 =
-            BlockReduceT(temp_storage).Reduce(max_l2, cub::Max{}, num_valid);
-        cg::this_thread_block().sync();
-        if (threadIdx.x == 0) {
-          d_max[k].m[i] = max_l2;
-        }
-      }
-    }
+    D1LastReduction<BlockReduceT>(soa_max, d_max, cub::Max{}, temp_storage);
 
     if (threadIdx.x == 0) {
       // reset retirement count so that next run succeeds
