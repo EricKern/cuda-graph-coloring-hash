@@ -162,9 +162,6 @@ void coloring1Kernel(IndexT* row_ptr,  // global mem
   IndexT* shMemCols = &shMemRows[tile_max_nodes+1]; // tile_max_edges elements
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
-
-  // using BlockReduceT = cub::BlockReduce<int, THREADS>;
-  // using TempStorageT = typename BlockReduceT::TempStorage;
   
   typedef cub::BlockReduce<int, THREADS, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY> BlockReduceT;
 
@@ -210,11 +207,9 @@ void coloring1Kernel(IndexT* row_ptr,  // global mem
 
   cg::this_thread_block().sync();
 
-  // The last block sums the results of all other blocks
+  // The last block reduces the results of all other blocks
   if (amLast) {
-    // Last block sum
     D1LastReduction<BlockReduceT>(soa_total, d_total, cub::Sum{}, temp_storage);
-    // Last block max
     D1LastReduction<BlockReduceT>(soa_max, d_max, cub::Max{}, temp_storage);
 
     if (threadIdx.x == 0) {

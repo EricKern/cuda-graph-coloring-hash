@@ -14,13 +14,23 @@
 
 ## 17.01
 - kernel in funktionen unterteilen -> compute / reduction -> Eric
-- andere hashfunktionen mit testen 
+    - Done. Erste Reduction ist 4 Zeiler da hab ich nichts gemacht
+- andere hashfunktionen mit testen
+    - Done. Aber Cpu-Coloring versionen sollte man noch zusätzlichen int Parameter geben mit welcher Hash funktion gerechnet werden soll.
+    - Unittest muss man wieder zum laufen bringen mit neuer GPU und CPU version.
 - Kernel nur Daten laden + schreiben -> nvbench -> Daniel
 - Aufräumen Dist1 + kernel setup
+    - Dist1 ist finde ich clean. GoogleStyleGuide vielleicht nicht immer eingehalten, aber ok.
+    - Kernel-Setup ist wieder schlecht. ShMem kann man nicht wiederverwenden wenn man mehrere HashFunktionen
+    verwendet und zwischendrin schon reduziert. Status output wie groß finales Tiling und shmem consumption is
+    finde ich gut.
+    - Inkonsistente verwendung von printf in main und cout in kernel_setup schlecht. Ich mag std::printf mehr.
 - Dist2 ohne sorting network
 - Tiles in subtiles unterteilen um für mehr coalescedes laden -> allignment beachten
 - coalesced reduction AOS? -> in global memory
+    - Done. Braucht man für mehrere hash functionen.
 - simples tiling -> ohne workload zu beachten -> baseline
 - launch bounds
 - shared memory reusage -> SO artikel
+    - zu static und dynamic Sharedmem mixen gibts wenig online docu dazu und weiß ich nicht ob da Fehler passieren können. Hinsichtlich mehrerer Blocks pro SM?
 - sorting network für dist2
