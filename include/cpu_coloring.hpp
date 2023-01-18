@@ -33,7 +33,7 @@ void cpu_dist1(const IndexType* row_ptr,  // global mem
       if (col != glob_row) {  // skip connection to node itself
         auto const col_hash = hash(col, static_k_param);
 
-        for (auto counter_idx = 0; counter_idx < max_bit_width; ++counter_idx) {
+        for (auto counter_idx = 0; counter_idx < num_bit_widths; ++counter_idx) {
           auto shift_val = start_bit_width + counter_idx;
           
           std::make_unsigned_t<IndexType> mask = (1u << shift_val) - 1u;
@@ -107,12 +107,12 @@ void cpuDist2(const IndexType* row_ptr,  // global mem
     // Now we actually do reduce_by_key of list with all ones. With bitmask applied to
     // sorted list as keys. Then we find max in reduced array.
 
-    for(IndexType counter_idx = 0; counter_idx < max_bit_width; ++counter_idx){
+    for(IndexType counter_idx = 0; counter_idx < num_bit_widths; ++counter_idx){
       auto shift_val = start_bit_width + counter_idx;
 
       std::make_unsigned_t<IndexType> mask = (1u << shift_val) - 1;
-      Counters::value_type max_so_far = 1;
-      Counters::value_type current = 1;
+      int max_so_far = 1;
+      int current = 1;
 
       auto group_start_hash = workspace[0];
       for (auto edge_idx = 1; edge_idx < j; ++edge_idx) {

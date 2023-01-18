@@ -4,8 +4,6 @@
 
 namespace apa22_coloring {
 
-static constexpr int static_k_param{1};
-
 template <typename IndexType>
 __forceinline__ __host__ __device__ std::uint32_t hash(IndexType val,
                                               int k_param) noexcept {

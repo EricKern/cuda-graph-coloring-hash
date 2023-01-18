@@ -73,7 +73,7 @@ void cpuDist2Thrust(const IndexType* row_ptr,  // global mem
 
     std::vector<int> group_counts(max_node_degree);
 
-    for(IndexType counter_idx = 0; counter_idx < max_bit_width; ++counter_idx){
+    for(IndexType counter_idx = 0; counter_idx < num_bit_widths; ++counter_idx){
       auto shift_val = start_bit_width + counter_idx;
       thrust::constant_iterator<IndexType> one_iter(1);
       // mask hashes -> keys for reduce_by_key

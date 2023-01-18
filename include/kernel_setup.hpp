@@ -5,6 +5,7 @@
 #include <coloringCounters.cuh>
 
 #include <cmath>
+#include <cub/cub.cuh>
 
 
 namespace apa22_coloring {
@@ -30,7 +31,7 @@ void kernel_setup(const char* inputMat,
   // Specialize BlockReduce type for our thread block
   using BlockReduceT = cub::BlockReduce<Counters,
 	                                      THREADS,
-	                                      cub::BLOCK_REDUCE_WARP_REDUCTIONS,
+	                                      cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY,
 	                                      1,
 	                                      1,
 	                                      750>;

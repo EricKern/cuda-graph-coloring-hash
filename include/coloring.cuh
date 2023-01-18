@@ -60,6 +60,7 @@ __forceinline__ __device__
 void D1CollisionsLocal(IndexT* shMemRows,
                        IndexT* shMemCols,
                        IndexT* tile_boundaries,
+                       int hash_param,
                        Counters& total,
                        Counters& max) {
   Counters current_collisions;
@@ -74,16 +75,16 @@ void D1CollisionsLocal(IndexT* shMemRows,
     IndexT row_begin = shMemRows[i];
 		IndexT row_end = shMemRows[i + 1];
 
-    const auto row_hash = hash(glob_row, static_k_param);
+    const auto row_hash = hash(glob_row, hash_param);
     
     for (IndexT col_idx = row_begin; col_idx < row_end; ++col_idx) {
       IndexT col = shMemCols[col_idx - shMemRows[0]];
       // col_idx - shMemRows[0] transforms global col_idx to shMem index
       if (col != glob_row) {
-        const auto col_hash = hash(col, static_k_param);
+        const auto col_hash = hash(col, hash_param);
 
-        # pragma unroll max_bit_width
-        for (int counter_idx = 0; counter_idx < max_bit_width; ++counter_idx) {
+        # pragma unroll num_bit_widths
+        for (int counter_idx = 0; counter_idx < num_bit_widths; ++counter_idx) {
           int shift_val = start_bit_width + counter_idx;
 
           std::uint32_t mask = (1u << shift_val) - 1u;
@@ -108,6 +109,16 @@ void D1CollisionsLocal(IndexT* shMemRows,
   cg::this_thread_block().sync();
 }
 
+template <typename ReductionOp>
+__forceinline__ __device__
+int BlockLoadThreadReduce(int* g_addr, int num_elem, ReductionOp red_op) {
+  int sum = 0;
+  for (int i = threadIdx.x; i < num_elem; i += blockDim.x) {
+    sum = red_op(g_addr[i], sum);
+  }
+  return sum;
+}
+
 __device__ unsigned int retirementCount = 0;
 
 template <typename IndexT>
@@ -117,7 +128,10 @@ void coloring1Kernel(IndexT* row_ptr,  // global mem
                      IndexT* tile_boundaries,
                      int tile_max_nodes,
                      int tile_max_edges,
-                     Counters* d_results){
+                     SOACounters* soa_total,
+                     SOACounters* soa_max,
+                     Counters* d_total,
+                     Counters* d_max){
   const IndexT partNr = blockIdx.x;
 
   extern __shared__ IndexT shMem[];
@@ -126,34 +140,38 @@ void coloring1Kernel(IndexT* row_ptr,  // global mem
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
 
-  // thread local array to count collisions
+  // using BlockReduceT = cub::BlockReduce<int, THREADS>;
+  // using TempStorageT = typename BlockReduceT::TempStorage;
   
-  Counters total_collisions;
-  Counters max_collisions;
-  
-  D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, total_collisions, max_collisions);
-  
-  // Now each thread has counted all local collisions
-  // and we can do sum and max reduction for desired output
+  typedef cub::BlockReduce<int, THREADS, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY> BlockReduceT;
 
-  // // template BlockDim is bad
-  using BlockReduce = cub::BlockReduce<Counters, THREADS>;
-  using TempStorageT = typename BlockReduce::TempStorage;
+  __shared__ typename BlockReduceT::TempStorage temp_storage;
 
-  auto& temp_storage = reinterpret_cast<TempStorageT&>(shMem);
-  IndexT n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
+  const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
-  Counters sum_accu = BlockReduce(temp_storage).Reduce(total_collisions,
-                                                  Sum_Counters(), n_tileNodes);
-  cg::this_thread_block().sync();
+  for (int k = 0; k < hash_params.len; ++k) {
+    // thread local array to count collisions
+    Counters total_collisions;
+    Counters max_collisions;
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+                      total_collisions, max_collisions);
 
-  Counters max_accu = BlockReduce(temp_storage).Reduce(max_collisions,
-                                                  Max_Counters(), n_tileNodes);
-  cg::this_thread_block().sync();
+    for (int i = 0; i < num_bit_widths; ++i) {
+      int l1_sum = BlockReduceT(temp_storage)
+                       .Reduce(total_collisions.m[i], cub::Sum{}, n_tileNodes);
+      cg::this_thread_block().sync();
+      int l1_max = BlockReduceT(temp_storage)
+                       .Reduce(max_collisions.m[i], cub::Max{}, n_tileNodes);
+      cg::this_thread_block().sync();
 
-  if(threadIdx.x == 0){
-    d_results[blockIdx.x] = sum_accu;
-    d_results[blockIdx.x + gridDim.x] = max_accu;
+      // soa has an int array for each hash function.
+      // In this array all block reduce results of first counter are stored
+      // contiguous followed by the reduce results of the next counter ...
+      if(threadIdx.x == 0){
+        soa_total->m[k][partNr + i * gridDim.x] = l1_sum;
+        soa_max->m[k][partNr + i * gridDim.x] = l1_max;
+      }
+    }
   }
 
   __threadfence();
@@ -171,64 +189,36 @@ void coloring1Kernel(IndexT* row_ptr,  // global mem
 
   // The last block sums the results of all other blocks
   if (amLast) {
+    int num_valid = cub::min(blockDim.x, gridDim.x);
 
-    sum_accu = Counters{};
-    max_accu = Counters{};
-    
-    uint div = gridDim.x / (blockDim.x - 1);
-    uint rem = gridDim.x % (blockDim.x - 1);
-    uint block_valid;
-
-    // if (threadIdx.x == 0) {
-    //   sum_accu = d_results[threadIdx.x];
-    //   max_accu = d_results[threadIdx.x + gridDim.x];
-    // }
-
-    int num_iters = rem == 0 ? div : div + 1;
-    // complicated for loop in case we have more blocks than threads
-    for (uint nr_reduction = 0; nr_reduction < num_iters; ++nr_reduction){
-      if(nr_reduction < div){
-        block_valid = blockDim.x;
-      } else if (nr_reduction == div){
-        block_valid = rem;
-      } else {
-        block_valid = 0;
+    // Last block sum
+    for (int k = 0; k < hash_params.len; ++k) {
+      for (int i = 0; i < num_bit_widths; ++i) {
+        int* start_addr = soa_total->m[k] + i * gridDim.x;
+        int total_l2 = BlockLoadThreadReduce(start_addr, gridDim.x, cub::Sum{});
+        total_l2 =
+            BlockReduceT(temp_storage).Reduce(total_l2, cub::Sum{}, num_valid);
+        cg::this_thread_block().sync();
+        if (threadIdx.x == 0) {
+          d_total[k].m[i] = total_l2;
+        }
       }
-
-      // evlt. <=
-      int local_tid = threadIdx.x - 1;
-      if (threadIdx.x != 0 && local_tid < block_valid) {
-        sum_accu = d_results[local_tid + nr_reduction * (blockDim.x - 1)];
-      }
-
-      sum_accu = BlockReduce(temp_storage).Reduce(sum_accu,
-                                                      Sum_Counters(), block_valid + 1);
-      cg::this_thread_block().sync();
     }
-
-    for (uint nr_reduction = 0; nr_reduction < num_iters; ++nr_reduction){
-      if(nr_reduction < div){
-        block_valid = blockDim.x;
-      } else if (nr_reduction == div){
-        block_valid = rem;
-      } else {
-        block_valid = 0;
+    // Last block max
+    for (int k = 0; k < hash_params.len; ++k) {
+      for (int i = 0; i < num_bit_widths; ++i) {
+        int* start_addr = soa_max->m[k] + i * gridDim.x;
+        int max_l2 = BlockLoadThreadReduce(start_addr, gridDim.x, cub::Max{});
+        max_l2 =
+            BlockReduceT(temp_storage).Reduce(max_l2, cub::Max{}, num_valid);
+        cg::this_thread_block().sync();
+        if (threadIdx.x == 0) {
+          d_max[k].m[i] = max_l2;
+        }
       }
-      // evlt. <=
-      int local_tid = threadIdx.x - 1;
-      if (threadIdx.x != 0 && local_tid < block_valid) {
-        max_accu = d_results[local_tid + gridDim.x + nr_reduction * (blockDim.x - 1)];
-      }
-
-      max_accu = BlockReduce(temp_storage).Reduce(max_accu,
-                                                      Max_Counters(), block_valid + 1);
-      cg::this_thread_block().sync();
     }
 
     if (threadIdx.x == 0) {
-      d_results[0] = sum_accu;
-      d_results[1] = max_accu;
-
       // reset retirement count so that next run succeeds
       retirementCount = 0;
     }
@@ -291,12 +281,12 @@ void coloring2Kernel(IndexType* row_ptr,  // global mem
 			             brev_cmp<IndexType>{});
 
 
-      # pragma unroll max_bit_width
-      for(auto counter_idx = 0; counter_idx < max_bit_width; ++counter_idx){
+      # pragma unroll num_bit_widths
+      for(auto counter_idx = 0; counter_idx < num_bit_widths; ++counter_idx){
         auto shift_val = start_bit_width + counter_idx;
         std::make_unsigned_t<IndexType> mask = (1u << shift_val) - 1;
-        Counters::value_type max_current = 0;
-        Counters::value_type max_so_far = 0;
+        int max_current = 0;
+        int max_so_far = 0;
 
         auto hash = shMemWorkspace[local_workspace_begin];
         for (auto vertex_idx = 1; vertex_idx < num_local_vertices;

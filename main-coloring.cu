@@ -1,3 +1,4 @@
+#include <cli_parser.hpp>
 #include <cpumultiply.hpp>  //! header file for tiling
 #include <tiling.hpp>       //! header file for tiling
 #include <coloring.cuh>
@@ -19,20 +20,23 @@ void printResult(const apa22_coloring::Counters& sum,
                  const apa22_coloring::Counters& max) {
     printf("Total Collisions\n");
     const auto start_bw = apa22_coloring::start_bit_width;
-    for (uint i = 0; i < apa22_coloring::max_bit_width; ++i) {
+    for (uint i = 0; i < apa22_coloring::num_bit_widths; ++i) {
       printf("Mask width: %d, Collisions: %d\n", i+start_bw, sum.m[i]);
     }
 
     printf("Max Collisions per Node\n");
-    for (uint i = 0; i < apa22_coloring::max_bit_width; ++i) {
+    for (uint i = 0; i < apa22_coloring::num_bit_widths; ++i) {
       printf("Mask width: %d, Collisions: %d\n", i+start_bw, max.m[i]);
     }
 }
 
-int main() {
+int main(int argc, char const *argv[]) {
   using namespace apa22_coloring;
 
-  const char* inputMat = def::Mat3;
+  int mat_nr = 2;          //Default value
+  chCommandLineGet<int>(&mat_nr, "m", argc, argv);
+
+  const char* inputMat = def::choseMat(mat_nr);
 
   int* row_ptr;
   int* col_ptr;
@@ -52,19 +56,18 @@ int main() {
   int shMem_size_bytes;
   kernel_setup(inputMat, row_ptr, col_ptr, val_ptr, ndc_, m_rows, number_of_tiles, shMem_size_bytes);
   printf("Nr_tiles: %d\n", number_of_tiles);
-  printf("shMem: %d", shMem_size_bytes);
+  printf("shMem: %d\n", shMem_size_bytes);
+  printf("M-row %d", m_rows);
   std::cout << std::endl;
 
   int* d_row_ptr;
   int* d_col_ptr;
   int* d_tile_boundaries;
-  int* d_intra_tile_sep;
-  printf("M-row %d", m_rows);
-  std::cout << std::endl;
+  
   size_t row_ptr_len = m_rows + 1;
   size_t col_ptr_len = row_ptr[m_rows];
   size_t tile_bound_len = number_of_tiles + 1;
-  size_t intra_tile_sep_len = number_of_tiles;
+
       printf("Post cudaMalloc");
   std::cout << std::endl;
 
@@ -80,8 +83,29 @@ int main() {
   cudaMemcpy(d_tile_boundaries, ndc_, tile_bound_len * sizeof(int),
              cudaMemcpyHostToDevice);
 
-  Counters* d_results;
-  cudaMalloc((void**)&d_results, number_of_tiles * 2 *sizeof(Counters));
+  // For each bit_width we allocate a counter for each block and for each hash function
+  SOACounters h_soa_total;
+  for (int i = 0; i < hash_params.len; ++i) {
+    cudaMalloc((void**)&(h_soa_total.m[i]), num_bit_widths * number_of_tiles * sizeof(int));
+  }
+  SOACounters h_soa_max;
+  for (int i = 0; i < hash_params.len; ++i) {
+    cudaMalloc((void**)&(h_soa_max.m[i]), num_bit_widths * number_of_tiles * sizeof(int));
+  }
+  SOACounters* d_soa_total;
+  cudaMalloc((void**)&d_soa_total, sizeof(SOACounters));
+  SOACounters* d_soa_max;
+  cudaMalloc((void**)&d_soa_max, sizeof(SOACounters));
+
+  cudaMemcpy(d_soa_total, &h_soa_total, sizeof(SOACounters),
+             cudaMemcpyHostToDevice);
+  cudaMemcpy(d_soa_max, &h_soa_max, sizeof(SOACounters),
+             cudaMemcpyHostToDevice);
+
+  Counters* d_total;
+  cudaMalloc((void**)&d_total, hash_params.len * sizeof(Counters));
+  Counters* d_max;
+  cudaMalloc((void**)&d_max, hash_params.len * sizeof(Counters));
   
   // calc shMem
   size_t shMem_bytes = shMem_size_bytes;
@@ -97,20 +121,20 @@ int main() {
   // cudaFuncSetAttribute(coloring1Kernel<int>, cudaFuncAttributeMaxDynamicSharedMemorySize, 98304);
   coloring1Kernel<<<gridSize, blockSize, shMem_bytes>>>(
       d_row_ptr, d_col_ptr, d_tile_boundaries,
-      max_nodes, max_edges, d_results);
+      max_nodes, max_edges, d_soa_total, d_soa_max, d_total, d_max);
   cudaDeviceSynchronize();
 
-    printf("Post Kernel");
+  printf("Post Kernel");
   std::cout << std::endl;
 
-  Counters total;
-  cudaMemcpy(&total, d_results, 1 * sizeof(Counters),
-            cudaMemcpyDeviceToHost);
-  Counters max;
-  cudaMemcpy(&max, d_results + 1, 1 * sizeof(Counters),
-            cudaMemcpyDeviceToHost);
+  Counters* total = new Counters[hash_params.len];
+  cudaMemcpy(total, d_total, hash_params.len * sizeof(Counters),
+             cudaMemcpyDeviceToHost);
+  Counters* max = new Counters[hash_params.len];
+  cudaMemcpy(max, d_max, hash_params.len * sizeof(Counters),
+             cudaMemcpyDeviceToHost);
 
-  printResult(total, max);
+  printResult(total[0], max[0]);
 
   Counters cpu_max, cpu_total;
   cpu_dist1(row_ptr, col_ptr, m_rows, &cpu_total, &cpu_max);
@@ -121,7 +145,6 @@ int main() {
   cudaFree(d_row_ptr);
   cudaFree(d_col_ptr);
   cudaFree(d_tile_boundaries);
-  cudaFree(d_intra_tile_sep);
 
   printf("Post cudaFree");
   std::cout << std::endl;
@@ -137,6 +160,8 @@ int main() {
   // namespace asc18 = asc_hash_graph_coloring;
   // asc18::cusparse_distance1(d_nnz, d_row, d_col, 1);
 
+  // delete total;
+  // delete max;
 	delete[] row_ptr;
 	delete[] col_ptr;
 	delete[] val_ptr;
