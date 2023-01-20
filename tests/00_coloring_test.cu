@@ -17,12 +17,12 @@ void printResult(const apa22_coloring::Counters& sum,
                  const apa22_coloring::Counters& max) {
   printf("Total Collisions\n");
   const auto start_bw = apa22_coloring::start_bit_width;
-  for (uint i = 0; i < apa22_coloring::num_bit_widths; ++i) {
+  for (int i = 0; i < apa22_coloring::num_bit_widths; ++i) {
     printf("Mask width: %d, Collisions: %d\n", i+start_bw, sum.m[i]);
   }
 
   printf("Max Collisions per Node\n");
-  for (uint i = 0; i < apa22_coloring::num_bit_widths; ++i) {
+  for (int i = 0; i < apa22_coloring::num_bit_widths; ++i) {
     printf("Mask width: %d, Collisions: %d\n", i+start_bw, max.m[i]);
   }
 }
@@ -84,7 +84,7 @@ class ColoringEnv : public testing::Test {
   }
 
   // Declares the variables your tests want to use.
-  uint number_of_tiles;
+  int number_of_tiles;
   int m_rows;
 
   int* row_ptr;
@@ -109,7 +109,7 @@ class ColoringEnv : public testing::Test {
 
 TEST_F(ColoringEnv, FillShmem) {
 
-  uint max_nodes, max_edges;
+  int max_nodes, max_edges;
   get_MaxTileSize(number_of_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
     // calc shMem
   size_t shMem_bytes = (max_nodes+1 + max_edges) * sizeof(int);
@@ -133,8 +133,8 @@ TEST_F(ColoringEnv, CountersReduction) {
   using namespace red_test;
   // You can access data in the test fixture here.
 
-  uint num_Blocks = 2;
-  uint num_Counters = 50;
+  int num_Blocks = 2;
+  int num_Counters = 50;
   std::vector<Counters> a(num_Counters);
   for (size_t i = 0; i < num_Counters; i++){
     for (size_t m_idx = 0; m_idx < num_bit_widths; m_idx++)
@@ -175,7 +175,7 @@ TEST_F(ColoringEnv, CountersReduction) {
 
 
 // TEST_F(ColoringEnv, CPU_Comparison) {
-//   uint max_nodes, max_edges;
+//   int max_nodes, max_edges;
 //   get_MaxTileSize(number_of_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
   
 //   // calc shMem
@@ -213,7 +213,7 @@ TEST_F(ColoringEnv, CountersReduction) {
 // }
 
 TEST_F(ColoringEnv, CPU_vs_CPU_Dist2) {
-  uint max_nodes, max_edges;
+  int max_nodes, max_edges;
   get_MaxTileSize(number_of_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
 
   auto redBinaryOp = [](auto lhs, auto rhs){return rhs > lhs ? rhs : lhs;};
