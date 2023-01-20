@@ -16,7 +16,7 @@ void initBenchmark(const char* Matrix, int* &d_row_ptr, int* &d_col_ptr, int* &d
     double* val_ptr;
     int m_rows;
     int* ndc_;
-    kernel_setup(Matrix, row_ptr, col_ptr, val_ptr, ndc_, m_rows, number_of_tiles, shMem_size_bytes);
+    kernel_setup(Matrix, row_ptr, col_ptr, val_ptr, ndc_, m_rows, number_of_tiles, shMem_size_bytes, 100);
   
     size_t row_ptr_len = m_rows + 1;
     size_t col_ptr_len = size = row_ptr[m_rows];
@@ -124,7 +124,7 @@ void coloring1Bench(nvbench::state &state){
     uint max_edges;
     size_t size;
 
-    initBenchmark(def::Mat3, d_row_ptr, d_col_ptr, d_tile_boundaries, d_soa_total, d_soa_max,
+    initBenchmark(def::Mat2, d_row_ptr, d_col_ptr, d_tile_boundaries, d_soa_total, d_soa_max,
                 d_total, d_max, max_nodes, max_edges, shMem_size_bytes, number_of_tiles, size);
     
     state.add_element_count(size, "Elements");

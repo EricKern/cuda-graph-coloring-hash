@@ -1,7 +1,9 @@
 #pragma once
 #include <cstdint>
+#include <cub/cub.cuh>
 
 static constexpr int THREADS = 512;
+static constexpr auto RED_ALGO = cub::BLOCK_REDUCE_WARP_REDUCTIONS ;
 
 namespace apa22_coloring {
   //=========================================

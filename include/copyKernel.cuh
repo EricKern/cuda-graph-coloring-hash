@@ -34,20 +34,23 @@ void copyKernel(IndexT* row_ptr,  // global mem
         }
     }
 
-    // total collisions
-    for (int k = 0; k < hash_params.len; k++){
-        for (int i = 0; i < num_bit_widths; i++){
-            if (threadIdx.x == 0){
-                d_total[k].m[i] = i + k;
+    // final reduction of last block
+    if (blockIdx.x == 0) {
+        // total collisions
+        for (int k = 0; k < hash_params.len; k++){
+            for (int i = 0; i < num_bit_widths; i++){
+                if (threadIdx.x == 0){
+                    d_total[k].m[i] = i + k;
+                }
             }
         }
-    }
 
-    // max collisions
-    for (int k = 0; k < hash_params.len; k++){
-        for (int i = 0; i < num_bit_widths; i++){
-            if (threadIdx.x == 0){
-                d_max[k].m[i] = i + k;
+        // max collisions
+        for (int k = 0; k < hash_params.len; k++){
+            for (int i = 0; i < num_bit_widths; i++){
+                if (threadIdx.x == 0){
+                    d_max[k].m[i] = i + k;
+                }
             }
         }
     }
