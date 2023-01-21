@@ -10,6 +10,12 @@ static constexpr const char* Mat2 =
 static constexpr const char* Mat3 =
     "/home/eric/Documents/graph-coloring/CurlCurl_4.mtx";
 
+static constexpr const char* Mat2_Cluster =
+    "/mnt/matrix_store/MM/Bodendiek/CurlCurl_0/CurlCurl_0.mtx";
+
+static constexpr const char* Mat3_Cluster =
+    "/mnt/matrix_store/MM/Bodendiek/CurlCurl_4/CurlCurl_4.mtx";
+
 const char* choseMat(int mat_nr) {
   const char* return_mat;
   switch (mat_nr) {
