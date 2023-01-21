@@ -54,7 +54,7 @@ int main(int argc, char const *argv[]) {
   //                           val_ptr, &row_ptr, &col_ptr, &val_ptr, true);
   int number_of_tiles;
   int shMem_size_bytes;
-  kernel_setup<true>(inputMat, row_ptr, col_ptr, val_ptr, ndc_, m_rows, number_of_tiles, shMem_size_bytes, 100);
+  kernel_setup<true>(inputMat, row_ptr, col_ptr, val_ptr, ndc_, m_rows, number_of_tiles, shMem_size_bytes, 300);
   printf("Nr_tiles: %d\n", number_of_tiles);
   printf("shMem: %d\n", shMem_size_bytes);
   printf("M-row %d", m_rows);
@@ -144,9 +144,13 @@ int main(int argc, char const *argv[]) {
   dim3 gridSize(number_of_tiles);
   dim3 blockSize(THREADS);
 
-  uint max_nodes, max_edges;
+  int max_nodes, max_edges;
   get_MaxTileSize(number_of_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
-
+  int Necessary_shMem = 2 * (max_nodes + max_edges + 1) * sizeof(int);
+  printf("max_nodes: %d \n", max_nodes);
+  printf("max_nodes: %d \n", max_edges);
+  printf("kernel_setup: %d \n", shMem_bytes);
+  printf("Necessary_shMem: %d \n", Necessary_shMem);
   printf("Pre Kernel");
   std::cout << std::endl;
 

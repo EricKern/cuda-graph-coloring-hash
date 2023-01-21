@@ -10,13 +10,12 @@
 
 namespace apa22_coloring {
 
-template<typename TempStorageT,
-         bool dist2 = false>
-int bytes_used(int max_nodes, int max_edges) {
+template<bool dist2 = false>
+int internal_bytes_used(int max_nodes, int max_edges) {
   if constexpr (dist2) {
-    return (max_nodes + 1 + max_edges) * sizeof(int) * 2 + sizeof(TempStorageT);
+    return (max_nodes + 1 + max_edges) * sizeof(int) * 2;
   } else {
-    return (max_nodes + 1 + max_edges) * sizeof(int) + sizeof(TempStorageT);
+    return (max_nodes + 1 + max_edges) * sizeof(int);
   }
 }
 
@@ -73,9 +72,11 @@ void kernel_setup(const char* inputMat,
   auto elements = static_cast<int64_t>(m_rows) + static_cast<int64_t>(m_cols);
 
   int num_tiles = std::ceil(elements / elem_p_block);
+  num_tiles += steps;
   std::cout << "elem_p_block " << elem_p_block << std::endl;
   std::cout << "num_tiles " << num_tiles << std::endl;
-  num_tiles += steps;
+  std::cout << "SizeOfTempstorage: " << sizeof(TempStorageT) << std::endl;
+  // num_tiles = 12240;
 
   // int* ndc_;     // array with indices of each tile in all slices
   int* slices_; // array with nodes grouped in slices
@@ -83,12 +84,13 @@ void kernel_setup(const char* inputMat,
   simple_tiling(
 	  m_rows, num_tiles, row_ptr, col_ptr, &slices_, &ndc_, &offsets_);
 
-  uint max_nodes, max_edges;
+  int max_nodes, max_edges;
   get_MaxTileSize(num_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
-
+  int total_bytes_shmem = internal_bytes_used<distance2>(max_nodes, max_edges)
+                        + sizeof(TempStorageT);
 
   std::cout << "Kernel setup pre while" << std::endl;
-  while (bytes_used<TempStorageT, distance2>(max_nodes, max_edges) > desired_shmem_lim) {
+  while (total_bytes_shmem > desired_shmem_lim) {
 	  delete[] slices_;
 	  delete[] offsets_;
 	  num_tiles += steps;
@@ -96,18 +98,21 @@ void kernel_setup(const char* inputMat,
 		  m_rows, num_tiles, row_ptr, col_ptr, &slices_, &ndc_, &offsets_);
 	  get_MaxTileSize(num_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
 	  std::cout << "while num_tile: " << num_tiles << std::endl;
+    total_bytes_shmem = internal_bytes_used<distance2>(max_nodes, max_edges)
+                        + sizeof(TempStorageT);
   }
   std::cout << "Left while" << std::endl;
-  // return values
-  n_tiles = num_tiles;
-  shMem_size_bytes = bytes_used<TempStorageT, distance2>(max_nodes, max_edges)
-                      - sizeof(TempStorageT);
-  std::cout << "shMem_size_bytes: " << shMem_size_bytes << std::endl;
-  std::cout << "num_tiles: " << num_tiles << std::endl;
   std::cout << "Pre permute" << std::endl;
   cpumultiplyDpermuteMatrix(num_tiles, 1, ndc_, slices_, row_ptr, col_ptr,
                             val_ptr, &row_ptr, &col_ptr, &val_ptr, true);
   std::cout << "Post permute" << std::endl;
+
+  // return values
+  get_MaxTileSize(num_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
+  n_tiles = num_tiles;
+  shMem_size_bytes = internal_bytes_used<distance2>(max_nodes, max_edges);
+  std::cout << "shMem_size_bytes: " << shMem_size_bytes << std::endl;
+  std::cout << "num_tiles: " << num_tiles << std::endl;
   delete[] slices_;
 	delete[] offsets_;
 }
