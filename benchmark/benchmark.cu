@@ -5,7 +5,8 @@
 #include "coloringCounters.cuh"
 #include "copyKernel.cuh"
 
-static constexpr const char* Mat = def::Mat3_Cluster;
+// static constexpr const char* Mat = def::Mat3_Cluster;
+static constexpr const char* Mat = def::Mat3;
 static constexpr int STEPS = 300;
 
 using namespace apa22_coloring;
@@ -29,7 +30,9 @@ void initBenchmark(const char* Matrix, int* &d_row_ptr, int* &d_col_ptr, int* &d
     }
   
     size_t row_ptr_len = m_rows + 1;
-    size_t col_ptr_len = size = row_ptr[m_rows];
+    size_t col_ptr_len = row_ptr[m_rows];
+
+    size = row_ptr_len + col_ptr_len;
     size_t tile_bound_len = number_of_tiles + 1;
 
     cudaMalloc((void**)&d_row_ptr, row_ptr_len * sizeof(int));
@@ -115,9 +118,12 @@ void copyBenchDist1(nvbench::state &state){
                 h_soa_total, h_soa_max, d_total, d_max, max_nodes, max_edges, shMem_size_bytes,
                 number_of_tiles, size);
     
+    size_t g_mem_writes = hash_params.len * num_bit_widths * number_of_tiles * sizeof(int);
+    g_mem_writes *= 2;
+    g_mem_writes += 2 * hash_params.len * sizeof(Counters);
     state.add_element_count(size, "Elements");
     state.add_global_memory_reads<int>(size);
-    //state.add_global_memory_writes<Counters>(size);
+    state.add_global_memory_writes<char>(g_mem_writes);
     state.collect_dram_throughput();
     state.collect_l1_hit_rates();
     state.collect_l2_hit_rates();
@@ -167,9 +173,12 @@ void coloring1Bench(nvbench::state &state){
                 h_soa_total, h_soa_max, d_total, d_max, max_nodes, max_edges, shMem_size_bytes,
                 number_of_tiles, size);
     
+    size_t g_mem_writes = hash_params.len * num_bit_widths * number_of_tiles * sizeof(int);
+    g_mem_writes *= 2;
+    g_mem_writes += 2 * hash_params.len * sizeof(Counters);
     state.add_element_count(size, "Elements");
     state.add_global_memory_reads<int>(size);
-    //state.add_global_memory_writes<Counters>(size);
+    state.add_global_memory_writes<char>(g_mem_writes);
     state.collect_dram_throughput();
     state.collect_l1_hit_rates();
     state.collect_l2_hit_rates();
@@ -227,9 +236,13 @@ void copyBenchDist2(nvbench::state &state){
     initBenchmarkD2(h_soa_total2, h_soa_max2, d_soa_total2, d_soa_max2, d_total2, d_max2,
                     number_of_tiles);
     
+    size_t g_mem_writes = hash_params.len * num_bit_widths * number_of_tiles * sizeof(int);
+    g_mem_writes *= 2;
+    g_mem_writes += 2 * hash_params.len * sizeof(Counters);
+    g_mem_writes *= 2;  // double mem writes compared to dist1
     state.add_element_count(size, "Elements");
     state.add_global_memory_reads<int>(size);
-    //state.add_global_memory_writes<Counters>(size);
+    state.add_global_memory_writes<char>(g_mem_writes);
     state.collect_dram_throughput();
     state.collect_l1_hit_rates();
     state.collect_l2_hit_rates();
@@ -293,9 +306,13 @@ void coloring2Bench(nvbench::state &state){
     initBenchmarkD2(h_soa_total2, h_soa_max2, d_soa_total2, d_soa_max2, d_total2, d_max2,
                     number_of_tiles);
     
+    size_t g_mem_writes = hash_params.len * num_bit_widths * number_of_tiles * sizeof(int);
+    g_mem_writes *= 2;
+    g_mem_writes += 2 * hash_params.len * sizeof(Counters);
+    g_mem_writes *= 2;  // double mem writes compared to dist1
     state.add_element_count(size, "Elements");
     state.add_global_memory_reads<int>(size);
-    //state.add_global_memory_writes<Counters>(size);
+    state.add_global_memory_writes<char>(g_mem_writes);
     state.collect_dram_throughput();
     state.collect_l1_hit_rates();
     state.collect_l2_hit_rates();
