@@ -34,3 +34,29 @@
 - shared memory reusage -> SO artikel
     - zu static und dynamic Sharedmem mixen gibts wenig online docu dazu und weiß ich nicht ob da Fehler passieren können. Hinsichtlich mehrerer Blocks pro SM?
 - sorting network für dist2
+
+
+## 23.01
+- baseline ohne tiling muss irgendwie berechnen wie viel
+ pro block loop geladen werden kann. Wie berechnen?
+- berechnung wann tiling fein genug ist braucht lange und mit permutation noch länger.
+Shared memory für dist2 mit sorting network braucht genaue größe der partition. (und dann vllt nochmal neu tilen)
+- launch bounds
+- cooperative launch
+- unique pointer für cuda malloc?
+- vllt test aufräumen
+- Objekt für benchmark setup und cleanup
+
+
+# 24.01
+- Singleton in benchmark
+- Statisches Partitionieren
+
+- kernel teilen in initial block reduction und final reduction              Eric
+- block reduction auskommentieren und laufzeit testen (nur hash berechnen)  Daniel
+
+- klären wie viele Hash funktionen gleichzeitig gebencht werden
+- google päsentation für aktuelle entwicklung und notizen
+
+- preprocessing evtl mit thrust/cub wenn nicht aufwändig
+- Streaming variante erst mal später
