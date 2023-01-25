@@ -2,9 +2,9 @@
 #include <cpumultiply.hpp>  //! header file for tiling
 #include <tiling.hpp>       //! header file for tiling
 #include <coloring.cuh>
+#include <setup.cuh>
 
-#include <stdio.h>
-#include <iostream>
+#include <cstdio>
 #include <numeric>
 // #include <thrust/host_vector.h>
 // #include <thrust/device_vector.h>
@@ -20,15 +20,15 @@
 
 void printResult(const apa22_coloring::Counters& sum,
                  const apa22_coloring::Counters& max) {
-    printf("Total Collisions\n");
+    std::printf("Total Collisions\n");
     const auto start_bw = apa22_coloring::start_bit_width;
     for (uint i = 0; i < apa22_coloring::num_bit_widths; ++i) {
-      printf("Mask width: %d, Collisions: %d\n", i+start_bw, sum.m[i]);
+      std::printf("Mask width: %d, Collisions: %d\n", i+start_bw, sum.m[i]);
     }
 
-    printf("Max Collisions per Node\n");
+    std::printf("Max Collisions per Node\n");
     for (uint i = 0; i < apa22_coloring::num_bit_widths; ++i) {
-      printf("Mask width: %d, Collisions: %d\n", i+start_bw, max.m[i]);
+      std::printf("Mask width: %d, Collisions: %d\n", i+start_bw, max.m[i]);
     }
 }
 
@@ -44,175 +44,91 @@ int main(int argc, char const *argv[]) {
   int* col_ptr;
   double* val_ptr;  // create pointers for matrix in csr format
   int m_rows;
-  // const int m_rows =
-  //     cpumultiplyDloadMTX(inputMat, &row_ptr, &col_ptr, &val_ptr);
 
   int* ndc_;     // array with indices of each tile in all slices
-  // int* slices_;  // array with nodes grouped in slices
-  // int* offsets_;
-  // simple_tiling(m_rows, number_of_tiles, row_ptr, col_ptr, &slices_, &ndc_,
-  //               &offsets_);
-  // cpumultiplyDpermuteMatrix(number_of_tiles, 1, ndc_, slices_, row_ptr, col_ptr,
-  //                           val_ptr, &row_ptr, &col_ptr, &val_ptr, true);
+
   int number_of_tiles;
   int shMem_size_bytes;
-#if DIST2
-    kernel_setup<true>(inputMat, row_ptr, col_ptr, val_ptr, ndc_, m_rows, number_of_tiles, shMem_size_bytes, 300);
-#else
-    kernel_setup(inputMat, row_ptr, col_ptr, val_ptr, ndc_, m_rows, number_of_tiles, shMem_size_bytes, 300);
-#endif
-  printf("Nr_tiles: %d\n", number_of_tiles);
-  printf("shMem: %d\n", shMem_size_bytes);
-  printf("M-row %d", m_rows);
-  std::cout << std::endl;
 
-  int* d_row_ptr;
-  int* d_col_ptr;
-  int* d_tile_boundaries;
-  
-  size_t row_ptr_len = m_rows + 1;
-  size_t col_ptr_len = row_ptr[m_rows];
-  size_t tile_bound_len = number_of_tiles + 1;
+  #if DIST2
+  kernel_setup<true>(inputMat, row_ptr, col_ptr, val_ptr, ndc_, m_rows, number_of_tiles, shMem_size_bytes, 300);
+  #else
+  kernel_setup(inputMat, row_ptr, col_ptr, val_ptr, ndc_, m_rows, number_of_tiles, shMem_size_bytes, 300);
+  #endif
 
-  printf("Post cudaMalloc");
-  std::cout << std::endl;
+  #if DIST2
+  GPUSetupD2 gpu_setup(row_ptr, col_ptr, ndc_, number_of_tiles);
+  #else
+  GPUSetupD1 gpu_setup(row_ptr, col_ptr, ndc_, number_of_tiles);
+  #endif
 
-  //==================================================
-  // Allocate memory for partitioned matrix on device
-  //==================================================
-  cudaMalloc((void**)&d_row_ptr, row_ptr_len * sizeof(int));
-  cudaMalloc((void**)&d_col_ptr, col_ptr_len * sizeof(int));
-  cudaMalloc((void**)&d_tile_boundaries, tile_bound_len * sizeof(int));
+  std::printf("Nr_tiles: %d\n", gpu_setup.n_tiles);
+  std::printf("shMem: %d\n", gpu_setup.calc_shMem());
+  std::printf("M-row %d\n", m_rows);
 
-
-  cudaMemcpy(d_row_ptr, row_ptr, row_ptr_len * sizeof(int),
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(d_col_ptr, col_ptr, col_ptr_len * sizeof(int),
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(d_tile_boundaries, ndc_, tile_bound_len * sizeof(int),
-             cudaMemcpyHostToDevice);
-
-  //==========================================================
-  // Allocate memory for intermediate block reduction results
-  //==========================================================
-  // For each bit_width we allocate a counter for each block and for each hash function
-  SOACounters h_soa_total1;
-  for (int i = 0; i < hash_params.len; ++i) {
-    cudaMalloc((void**)&(h_soa_total1.m[i]), num_bit_widths * number_of_tiles * sizeof(int));
-  }
-  SOACounters h_soa_max1;
-  for (int i = 0; i < hash_params.len; ++i) {
-    cudaMalloc((void**)&(h_soa_max1.m[i]), num_bit_widths * number_of_tiles * sizeof(int));
-  }
-
-#if DIST2
-    SOACounters h_soa_total2;
-    for (int i = 0; i < hash_params.len; ++i) {
-      cudaMalloc((void**)&(h_soa_total2.m[i]), num_bit_widths * number_of_tiles * sizeof(int));
-    }
-    SOACounters h_soa_max2;
-    for (int i = 0; i < hash_params.len; ++i) {
-      cudaMalloc((void**)&(h_soa_max2.m[i]), num_bit_widths * number_of_tiles * sizeof(int));
-    }
-#endif
-  //==========================================================================
-  // Allocate memory for structs holding pointers to intermediate result alloc
-  //==========================================================================
-  SOACounters* d_soa_total1;
-  cudaMalloc((void**)&d_soa_total1, sizeof(SOACounters));
-  SOACounters* d_soa_max1;
-  cudaMalloc((void**)&d_soa_max1, sizeof(SOACounters));
-
-  cudaMemcpy(d_soa_total1, &h_soa_total1, sizeof(SOACounters),
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(d_soa_max1, &h_soa_max1, sizeof(SOACounters),
-             cudaMemcpyHostToDevice);
-  
-#if DIST2
-    SOACounters* d_soa_total2;
-    cudaMalloc((void**)&d_soa_total2, sizeof(SOACounters));
-    SOACounters* d_soa_max2;
-    cudaMalloc((void**)&d_soa_max2, sizeof(SOACounters));
-
-    cudaMemcpy(d_soa_total2, &h_soa_total2, sizeof(SOACounters),
-              cudaMemcpyHostToDevice);
-    cudaMemcpy(d_soa_max2, &h_soa_max2, sizeof(SOACounters),
-              cudaMemcpyHostToDevice);
-#endif
-
-
-  //==================================
-  // Allocate memory for return values
-  //==================================
-  Counters* d_total1;
-  cudaMalloc((void**)&d_total1, hash_params.len * sizeof(Counters));
-  Counters* d_max1;
-  cudaMalloc((void**)&d_max1, hash_params.len * sizeof(Counters));
-
-#if DIST2
-    Counters* d_total2;
-    cudaMalloc((void**)&d_total2, hash_params.len * sizeof(Counters));
-    Counters* d_max2;
-    cudaMalloc((void**)&d_max2, hash_params.len * sizeof(Counters));
-#endif
+  std::printf("node: %d\n", gpu_setup.max_nodes);
+  std::printf("edges: %d\n", gpu_setup.max_edges);
   
   // calc shMem
-  size_t shMem_bytes = shMem_size_bytes;
-  dim3 gridSize(number_of_tiles);
+  size_t shMem_bytes = gpu_setup.calc_shMem();
+  dim3 gridSize(gpu_setup.n_tiles);
   dim3 blockSize(THREADS);
 
-  int max_nodes, max_edges;
-  get_MaxTileSize(number_of_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
-  int Necessary_shMem = 2 * (max_nodes + max_edges + 1) * sizeof(int);
-  printf("max_nodes: %d \n", max_nodes);
-  printf("max_nodes: %d \n", max_edges);
-  printf("kernel_setup: %d \n", shMem_bytes);
-  printf("Necessary_shMem: %d \n", Necessary_shMem);
-  printf("Pre Kernel");
-  std::cout << std::endl;
-
 #if DIST2
-    coloring2Kernel<<<gridSize, blockSize, shMem_bytes>>>(
-        d_row_ptr, d_col_ptr, d_tile_boundaries, max_nodes, max_edges,
-        d_soa_total1, d_soa_max1, d_soa_total2, d_soa_max2,
-        d_total1, d_max1, d_total2, d_max2);
+  coloring2Kernel<<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
+                                                        gpu_setup.d_col_ptr,
+                                                        gpu_setup.d_tile_boundaries,
+                                                        gpu_setup.max_nodes,
+                                                        gpu_setup.max_edges,
+                                                        gpu_setup.d_soa_total1,
+                                                        gpu_setup.d_soa_max1,
+                                                        gpu_setup.d_soa_total2,
+                                                        gpu_setup.d_soa_max2,
+                                                        gpu_setup.d_total1,
+                                                        gpu_setup.d_max1,
+                                                        gpu_setup.d_total2,
+                                                        gpu_setup.d_max2);
 #else
-    cudaFuncSetAttribute(coloring1Kernel<int>, cudaFuncAttributeMaxDynamicSharedMemorySize, 98304);
-    coloring1Kernel<<<gridSize, blockSize, shMem_bytes>>>(
-        d_row_ptr, d_col_ptr, d_tile_boundaries,
-        max_nodes, max_edges, d_soa_total1, d_soa_max1, d_total1, d_max1);
+  coloring1Kernel<<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
+                                                        gpu_setup.d_col_ptr,
+                                                        gpu_setup.d_tile_boundaries,
+                                                        gpu_setup.max_nodes,
+                                                        gpu_setup.max_edges,
+                                                        gpu_setup.d_soa_total1,
+                                                        gpu_setup.d_soa_max1,
+                                                        gpu_setup.d_total1,
+                                                        gpu_setup.d_max1);
 #endif
   cudaDeviceSynchronize();
 
-  printf("Post Kernel");
-  std::cout << std::endl;
+  std::printf("Post Kernel\n");
 
   //====================================
   // Allocate memory for results on host
   //====================================
   std::unique_ptr<Counters[]> total1(new Counters[hash_params.len]);
   std::unique_ptr<Counters[]> max1(new Counters[hash_params.len]);
-  cudaMemcpy(total1.get(), d_total1, hash_params.len * sizeof(Counters),
+  cudaMemcpy(total1.get(), gpu_setup.d_total1, hash_params.len * sizeof(Counters),
              cudaMemcpyDeviceToHost);
-  cudaMemcpy(max1.get(), d_max1, hash_params.len * sizeof(Counters),
+  cudaMemcpy(max1.get(), gpu_setup.d_max1, hash_params.len * sizeof(Counters),
              cudaMemcpyDeviceToHost);
-  printf("Dist 1");
+  std::printf("Dist 1\n");
   printResult(total1[0], max1[0]);
 
 #if DIST2
-    std::unique_ptr<Counters[]> total2(new Counters[hash_params.len]);
-    std::unique_ptr<Counters[]> max2(new Counters[hash_params.len]);
-    cudaMemcpy(total2.get(), d_total2, hash_params.len * sizeof(Counters),
-              cudaMemcpyDeviceToHost);
-    cudaMemcpy(max2.get(), d_max2, hash_params.len * sizeof(Counters),
-              cudaMemcpyDeviceToHost);
-    printf("Dist 2");
-    printResult(total2[0], max2[0]);
+  std::unique_ptr<Counters[]> total2(new Counters[hash_params.len]);
+  std::unique_ptr<Counters[]> max2(new Counters[hash_params.len]);
+  cudaMemcpy(total2.get(), gpu_setup.d_total2, hash_params.len * sizeof(Counters),
+            cudaMemcpyDeviceToHost);
+  cudaMemcpy(max2.get(), gpu_setup.d_max2, hash_params.len * sizeof(Counters),
+            cudaMemcpyDeviceToHost);
+  std::printf("Dist 2\n");
+  printResult(total2[0], max2[0]);
 #endif
 
   Counters cpu_max1, cpu_total1;
   cpu_dist1(row_ptr, col_ptr, m_rows, &cpu_total1, &cpu_max1);
-  printf("CPU dist 1 results");
+  std::printf("CPU dist 1 results\n");
   printResult(cpu_total1, cpu_max1);
 
 #if DIST2
@@ -227,42 +143,9 @@ int main(int argc, char const *argv[]) {
                                                 transBinaryOp);
     cpuDist2(row_ptr, col_ptr, m_rows, max_node_degree, &cpu_total2, &cpu_max2);
     
-    printf("CPU dist 2 results");
+    std::printf("CPU dist 2 results\n");
     printResult(cpu_total2, cpu_max2);
 #endif
-
-
-  //=================
-  // Free device mem
-  //=================
-  cudaFree(d_total1);
-  cudaFree(d_max1);
-
-  for (int i = 0; i < hash_params.len; ++i) {
-    cudaFree(h_soa_total1.m[i]);
-    cudaFree(h_soa_max1.m[i]);
-  }
-  cudaFree(d_soa_total1);
-  cudaFree(d_soa_max1);
-
-  cudaFree(d_row_ptr);
-  cudaFree(d_col_ptr);
-  cudaFree(d_tile_boundaries);
-
-#if DIST2
-    cudaFree(d_total2);
-    cudaFree(d_max2);
-
-    for (int i = 0; i < hash_params.len; ++i) {
-      cudaFree(h_soa_total2.m[i]);
-      cudaFree(h_soa_max2.m[i]);
-    }
-    cudaFree(d_soa_total2);
-    cudaFree(d_soa_max2);
-#endif
-
-  printf("Post cudaFree");
-  std::cout << std::endl;
 
   // thrust::host_vector<int> row(row_ptr, row_ptr + m_rows + 1);
   // thrust::host_vector<int> col(col_ptr, col_ptr + row_ptr[m_rows]);
