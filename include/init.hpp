@@ -4,13 +4,14 @@
 
 #include "defines.hpp"
 
-static constexpr const char* Mat = def::Mat3;
+static constexpr const char* Mat = def::Mat3_Cluster;
 static constexpr int STEPS = 300;
 static constexpr int SHMEMLIMIT = 19 * 1024;
 
 struct Dist{
     int* rowPtr;
     int* colPtr;
+    int* ndc;
     int nTiles;
     int maxNodes;
     int maxEdges;
@@ -86,11 +87,10 @@ class Init {
             Dist tmpDist = distStruct;
             int* slices;
             int* offsets;
-            int* ndc;
-            simple_tiling(m_rows, startTiles, tmpDist.rowPtr, tmpDist.colPtr, &slices, &ndc, &offsets);
+            simple_tiling(m_rows, startTiles, tmpDist.rowPtr, tmpDist.colPtr, &slices, &tmpDist.ndc, &offsets);
             if (!tilesKnown) {
                 int shMemSize;
-                get_MaxTileSize(tmpDist.nTiles, ndc, tmpDist.rowPtr, &tmpDist.maxNodes, &tmpDist.maxEdges);
+                get_MaxTileSize(tmpDist.nTiles, tmpDist.ndc, tmpDist.rowPtr, &tmpDist.maxNodes, &tmpDist.maxEdges);
                 shMemSize = internal_bytes_used2(tmpDist.maxNodes, tmpDist.maxEdges, dist2)
                                 + sizeof(TempStorageT);
                 
@@ -98,22 +98,21 @@ class Init {
                     delete[] slices;
 	                delete[] offsets;
 	                startTiles += STEPS;
-	                simple_tiling(m_rows, startTiles, tmpDist.rowPtr, tmpDist.colPtr, &slices, &ndc, &offsets);
-	                get_MaxTileSize(startTiles, ndc, tmpDist.rowPtr, &tmpDist.maxNodes, &tmpDist.maxEdges);
+	                simple_tiling(m_rows, startTiles, tmpDist.rowPtr, tmpDist.colPtr, &slices, &tmpDist.ndc, &offsets);
+	                get_MaxTileSize(startTiles, tmpDist.ndc, tmpDist.rowPtr, &tmpDist.maxNodes, &tmpDist.maxEdges);
                     shMemSize = internal_bytes_used2(tmpDist.maxNodes, tmpDist.maxEdges, dist2)
                                             + sizeof(TempStorageT);
                 }
             }
             tmpDist.nTiles = startTiles;
-            cpumultiplyDpermuteMatrix(tmpDist.nTiles, 1, ndc, slices, tmpDist.rowPtr, tmpDist.colPtr,
+            cpumultiplyDpermuteMatrix(tmpDist.nTiles, 1, tmpDist.ndc, slices, tmpDist.rowPtr, tmpDist.colPtr,
                                      m_valPtr, &tmpDist.rowPtr, &tmpDist.colPtr, &m_valPtr, true);
-            get_MaxTileSize(tmpDist.nTiles, ndc, tmpDist.rowPtr, &tmpDist.maxNodes, &tmpDist.maxEdges);
+            get_MaxTileSize(tmpDist.nTiles, tmpDist.ndc, tmpDist.rowPtr, &tmpDist.maxNodes, &tmpDist.maxEdges);
             tmpDist.shMemSize = internal_bytes_used2(tmpDist.maxNodes, tmpDist.maxEdges, dist2)
                                 + sizeof(TempStorageT);
             
             distStruct = tmpDist;
             delete[] slices;
-            delete[] ndc;
             delete[] offsets;
         }
 

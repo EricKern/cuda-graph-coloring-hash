@@ -1,0 +1,153 @@
+# Devices
+
+## [0] `NVIDIA GeForce RTX 2080 Ti`
+* SM Version: 750 (PTX Version: 750)
+* Number of SMs: 68
+* SM Default Clock Rate: 1545 MHz
+* Global Memory: 10846 MiB Free / 11019 MiB Total
+* Global Memory Bus Peak: 616 GB/sec (352-bit DDR @7000MHz)
+* Max Shared Memory: 64 KiB/SM, 48 KiB/Block
+* L2 Cache Size: 5632 KiB
+* Maximum Active Blocks: 16/SM
+* Maximum Active Threads: 1024/SM, 1024/Block
+* Available Registers: 65536/SM, 65536/Block
+* ECC Enabled: No
+
+# Log
+
+```
+Run:  [1/12] Dist1 [Device=0]
+Pass: Cold: 8.257005ms GPU, 8.262601ms CPU, 26.82s total GPU, 26.93s total wall, 3248x 
+Pass: Batch: 8.369283ms GPU, 27.19s total GPU, 27.24s total wall, 3249x
+Run:  [2/12] Dist1OnlyLoad [Device=0]
+Pass: Cold: 0.228281ms GPU, 0.233834ms CPU, 0.50s total GPU, 0.57s total wall, 2191x 
+Pass: Batch: 0.219224ms GPU, 0.52s total GPU, 0.52s total wall, 2359x
+Run:  [3/12] Dist1NoReduceNoWrite [Device=0]
+Pass: Cold: 0.232559ms GPU, 0.238139ms CPU, 0.50s total GPU, 0.57s total wall, 2150x 
+Pass: Batch: 0.223874ms GPU, 0.52s total GPU, 0.52s total wall, 2319x
+Run:  [4/12] Dist1NoReduce [Device=0]
+Pass: Cold: 0.401902ms GPU, 0.407426ms CPU, 0.50s total GPU, 0.54s total wall, 1245x 
+Pass: Batch: 0.394149ms GPU, 0.52s total GPU, 0.52s total wall, 1324x
+Run:  [5/12] Dist1NoLastReduce [Device=0]
+Pass: Cold: 7.830349ms GPU, 7.836100ms CPU, 0.50s total GPU, 0.50s total wall, 64x 
+Pass: Batch: 7.825623ms GPU, 0.52s total GPU, 0.52s total wall, 67x
+Run:  [6/12] Dist2 [Device=0]
+Pass: Cold: 2129.181128ms GPU, 2129.173699ms CPU, 681.34s total GPU, 681.35s total wall, 320x 
+Pass: Batch: 2128.530877ms GPU, 683.26s total GPU, 683.26s total wall, 321x
+Run:  [7/12] Dist2OnlyLoad [Device=0]
+Pass: Cold: 0.248751ms GPU, 0.254664ms CPU, 0.50s total GPU, 0.56s total wall, 2011x 
+Pass: Batch: 0.240430ms GPU, 0.52s total GPU, 0.52s total wall, 2159x
+Run:  [8/12] Dist2NoReduceNoWriteOnlyD1 [Device=0]
+Pass: Cold: 0.260392ms GPU, 0.266330ms CPU, 0.50s total GPU, 0.56s total wall, 1921x 
+Pass: Batch: 0.252739ms GPU, 0.52s total GPU, 0.52s total wall, 2060x
+Run:  [9/12] Dist2NoReduceNoWriteOnlyD2 [Device=0]
+Pass: Cold: 1842.937449ms GPU, 1842.931844ms CPU, 206.41s total GPU, 206.41s total wall, 112x 
+Pass: Batch: 1842.129875ms GPU, 208.16s total GPU, 208.16s total wall, 113x
+Run:  [10/12] Dist2NoReduceNoWrite [Device=0]
+Pass: Cold: 1842.340007ms GPU, 1842.334308ms CPU, 176.86s total GPU, 176.87s total wall, 96x 
+Pass: Batch: 1843.731424ms GPU, 178.84s total GPU, 178.84s total wall, 97x
+Run:  [11/12] Dist2NoReduce [Device=0]
+Pass: Cold: 1845.177634ms GPU, 1845.171965ms CPU, 974.25s total GPU, 974.27s total wall, 528x 
+Pass: Batch: 1846.608168ms GPU, 976.86s total GPU, 976.86s total wall, 529x
+Run:  [12/12] Dist2NoLastReduce [Device=0]
+Pass: Cold: 2126.478832ms GPU, 2126.471756ms CPU, 1156.80s total GPU, 1156.82s total wall, 544x 
+Pass: Batch: 2127.086656ms GPU, 1159.26s total GPU, 1159.27s total wall, 545x
+```
+
+# Benchmark Results
+
+## Dist1
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|---------|----------|-------|----------|-------|---------|-----------|
+|   3248x | 8.263 ms | 3.29% | 8.257 ms | 3.29% |   3249x |  8.369 ms |
+
+## Dist1OnlyLoad
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| Samples |  CPU Time  | Noise |  GPU Time  | Noise | Samples | Batch GPU  |
+|---------|------------|-------|------------|-------|---------|------------|
+|   2191x | 233.834 us | 2.44% | 228.281 us | 0.26% |   2359x | 219.224 us |
+
+## Dist1NoReduceNoWrite
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| Samples |  CPU Time  | Noise |  GPU Time  | Noise | Samples | Batch GPU  |
+|---------|------------|-------|------------|-------|---------|------------|
+|   2150x | 238.139 us | 2.41% | 232.559 us | 0.26% |   2319x | 223.874 us |
+
+## Dist1NoReduce
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| Samples |  CPU Time  | Noise |  GPU Time  | Noise | Samples | Batch GPU  |
+|---------|------------|-------|------------|-------|---------|------------|
+|   1245x | 407.426 us | 1.41% | 401.902 us | 0.33% |   1324x | 394.149 us |
+
+## Dist1NoLastReduce
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|---------|----------|-------|----------|-------|---------|-----------|
+|     64x | 7.836 ms | 0.09% | 7.830 ms | 0.05% |     67x |  7.826 ms |
+
+## Dist2
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|---------|----------|-------|----------|-------|---------|-----------|
+|    320x |  2.129 s | 0.62% |  2.129 s | 0.62% |    321x |   2.129 s |
+
+## Dist2OnlyLoad
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| Samples |  CPU Time  | Noise |  GPU Time  | Noise | Samples | Batch GPU  |
+|---------|------------|-------|------------|-------|---------|------------|
+|   2011x | 254.664 us | 2.40% | 248.751 us | 0.25% |   2159x | 240.430 us |
+
+## Dist2NoReduceNoWriteOnlyD1
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| Samples |  CPU Time  | Noise |  GPU Time  | Noise | Samples | Batch GPU  |
+|---------|------------|-------|------------|-------|---------|------------|
+|   1921x | 266.330 us | 2.29% | 260.392 us | 0.19% |   2060x | 252.739 us |
+
+## Dist2NoReduceNoWriteOnlyD2
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|---------|----------|-------|----------|-------|---------|-----------|
+|    112x |  1.843 s | 1.16% |  1.843 s | 1.16% |    113x |   1.842 s |
+
+## Dist2NoReduceNoWrite
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|---------|----------|-------|----------|-------|---------|-----------|
+|     96x |  1.842 s | 1.18% |  1.842 s | 1.18% |     97x |   1.844 s |
+
+## Dist2NoReduce
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|---------|----------|-------|----------|-------|---------|-----------|
+|    528x |  1.845 s | 1.18% |  1.845 s | 1.18% |    529x |   1.847 s |
+
+## Dist2NoLastReduce
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|---------|----------|-------|----------|-------|---------|-----------|
+|    544x |  2.126 s | 0.59% |  2.126 s | 0.59% |    545x |   2.127 s |
