@@ -16,7 +16,7 @@
 
 #include <cpu_coloring.hpp>
 
-#define DIST2 0
+#define DIST2 1
 
 void printResult(const apa22_coloring::Counters& sum,
                  const apa22_coloring::Counters& max) {
@@ -38,21 +38,28 @@ int main(int argc, char const *argv[]) {
   constexpr int MAX_THREADS_SM = 1024;  // Turing (2080ti)
   constexpr int BLK_SM = 4;
   constexpr int THREADS = MAX_THREADS_SM/BLK_SM;
+  #if DIST2
+  auto kernel = coloring2Kernel<int, THREADS, BLK_SM>;
+  #else
+  auto kernel = coloring1Kernel<int, THREADS, BLK_SM>;
+  #endif
 
   int devId, MaxShmemSizeSM;
   cudaGetDevice(&devId);
-  // On Turing 64 kB Shmem hard Cap with 32kB L1
   cudaDeviceGetAttribute(&MaxShmemSizeSM, cudaDevAttrMaxSharedMemoryPerMultiprocessor, devId);
-  cudaFuncAttributes a;
-  cudaFuncGetAttributes(&a, (const void*)coloring1Kernel<int, THREADS, BLK_SM>);
+  // On Turing 64 kB Shmem hard Cap with 32kB L1.
+  // There are other predefined "carveout" levels that might also be an option
+  // if more L1 cache seems usefull (on Turing just 32kB).
   // MaxShmemSizeSM /= 2;
+  cudaFuncAttributes a;
+  cudaFuncGetAttributes(&a, kernel);
 
   // Starting with CC 8.0, cuda runtime needs 1KB shMem per block
   int const static_shMem_SM = a.sharedSizeBytes * BLK_SM; 
   int const max_dyn_SM = MaxShmemSizeSM - static_shMem_SM;
   
-  // cudaFuncSetAttribute(coloring1Kernel<int, THREADS, BLK_SM>, cudaFuncAttributePreferredSharedMemoryCarveout, 100);
-  cudaFuncSetAttribute(coloring1Kernel<int, THREADS, BLK_SM>,
+  // cudaFuncSetAttribute(kernel, cudaFuncAttributePreferredSharedMemoryCarveout, 100);
+  cudaFuncSetAttribute(kernel,
                       cudaFuncAttributeMaxDynamicSharedMemorySize, max_dyn_SM);
 
   std::printf("MaxShmemSizeSM: %d\n", MaxShmemSizeSM);
@@ -72,7 +79,11 @@ int main(int argc, char const *argv[]) {
   std::unique_ptr<int[]> tile_boundaries; // array with indices of each tile in all slices
   int n_tiles;
   int max_node_degree;
+  #if DIST2
+  int tile_mem = (max_dyn_SM/BLK_SM)/2;
+  #else
   int tile_mem = max_dyn_SM/BLK_SM;
+  #endif
   very_simple_tiling(row_ptr, m_rows, tile_mem, &tile_boundaries, &n_tiles, &max_node_degree);
 
   #if DIST2
@@ -99,8 +110,7 @@ int main(int argc, char const *argv[]) {
   <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
                                          gpu_setup.d_col_ptr,
                                          gpu_setup.d_tile_boundaries,
-                                         gpu_setup.max_nodes,
-                                         gpu_setup.max_edges,
+                                         tile_mem,
                                          gpu_setup.d_soa_total1,
                                          gpu_setup.d_soa_max1,
                                          gpu_setup.d_soa_total2,
@@ -110,14 +120,10 @@ int main(int argc, char const *argv[]) {
                                          gpu_setup.d_total2,
                                          gpu_setup.d_max2);
 #else
-  // int maxbytes = 98304; // 96 KB
-  // cudaFuncSetAttribute(coloring1Kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, maxbytes);
   coloring1Kernel<int, THREADS, BLK_SM>
   <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
                                          gpu_setup.d_col_ptr,
                                          gpu_setup.d_tile_boundaries,
-                                         gpu_setup.max_nodes,
-                                         gpu_setup.max_edges,
                                          gpu_setup.d_soa_total1,
                                          gpu_setup.d_soa_max1,
                                          gpu_setup.d_total1,
@@ -152,19 +158,11 @@ int main(int argc, char const *argv[]) {
 
   Counters cpu_max1, cpu_total1;
   cpu_dist1(row_ptr, col_ptr, m_rows, &cpu_total1, &cpu_max1);
-  // std::printf("CPU dist 1 results\n");
-  // printResult(cpu_total1, cpu_max1);
+  std::printf("CPU dist 1 results\n");
+  printResult(cpu_total1, cpu_max1);
 
 #if DIST2
     Counters cpu_max2, cpu_total2;
-    auto redBinaryOp = [](auto lhs, auto rhs){return rhs > lhs ? rhs : lhs;};
-    auto transBinaryOp = [](auto lhs, auto rhs){return rhs - lhs;};
-    int max_node_degree = std::transform_reduce(row_ptr,
-                                                row_ptr + m_rows,
-                                                row_ptr + 1,
-                                                0,
-                                                redBinaryOp,
-                                                transBinaryOp);
     cpuDist2(row_ptr, col_ptr, m_rows, max_node_degree, &cpu_total2, &cpu_max2);
     
     std::printf("CPU dist 2 results\n");

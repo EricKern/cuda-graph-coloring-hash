@@ -23,7 +23,7 @@ void Partition2ShMem(IndexT* shMemRows,
                      IndexT* col_ptr,     // global mem
                      IndexT* tile_boundaries) {
   // Determine which tile to load with blockId
-  int part_nr = blockIdx.x;
+  const int part_nr = blockIdx.x;
 
   int part_size = tile_boundaries[part_nr+1] - tile_boundaries[part_nr] + 1;
   // +1 to load one additional row_ptr value to determine size of last row
@@ -137,34 +137,32 @@ void D1LastReduction(SOACounters* soa, Counters* out_counters, ReductionOp op,
 
 __device__ unsigned int retirementCount = 0;
 
+// We rely on guarantees of tiling i.e. constant tile size
+// (n_rows + n_cols + 1) = constant, NumTiles = gridDim.x
 template <typename IndexT,
           int THREADS,
           int BLK_SM,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
-void coloring1Kernel(IndexT* row_ptr,  // global mem
-                     IndexT* col_ptr,  // global mem
-                     IndexT* tile_boundaries,
-                     int tile_max_nodes,
-                     int tile_max_edges,
+void coloring1Kernel(IndexT* row_ptr,
+                     IndexT* col_ptr,
+                     IndexT* tile_boundaries,   // gridDim.x + 1 elements
                      SOACounters* soa_total,
                      SOACounters* soa_max,
                      Counters* d_total,
-                     Counters* d_max){
-  const IndexT partNr = blockIdx.x;
+                     Counters* d_max) {
+  const int partNr = blockIdx.x;
+  const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
   extern __shared__ IndexT shMem[];
-  IndexT* shMemRows = shMem;                      // tile_max_nodes +1 elements
-  IndexT* shMemCols = &shMemRows[tile_max_nodes+1]; // tile_max_edges elements
+  IndexT* shMemRows = shMem;                      // n_tileNodes +1 elements
+  IndexT* shMemCols = &shMemRows[n_tileNodes+1];
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
   
   typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceT;
-
   __shared__ typename BlockReduceT::TempStorage temp_storage;
-
-  const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
   for (int k = 0; k < hash_params.len; ++k) {
     // thread local array to count collisions
@@ -315,8 +313,7 @@ __launch_bounds__(THREADS, BLK_SM)
 void coloring2Kernel(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     int tile_max_nodes,
-                     int tile_max_edges,
+                     int dyn_shmem_bytes,     // n_rows + 1 + n_cols
                      SOACounters* soa_total1,
                      SOACounters* soa_max1,
                      SOACounters* soa_total2,
@@ -325,19 +322,20 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
                      Counters* d_max1,
                      Counters* d_total2,
                      Counters* d_max2) {
+  const int partNr = blockIdx.x;
+  const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
+  const int n_tileEdges = dyn_shmem_bytes/sizeof(IndexT) - (n_tileNodes+1);
 
   extern __shared__ IndexT shMem[];
-  IndexT* shMemRows = shMem;                        // tile_max_nodes +1 elements
-  IndexT* shMemCols = &shMemRows[tile_max_nodes+1]; // tile_max_edges elements
-  IndexT* shMemWorkspace = &shMemCols[tile_max_edges]; // tile_max_nodes + tile_max_edges + 1 elements
+  IndexT* shMemRows = shMem;                        // n_tileNodes + 1 elements
+  IndexT* shMemCols = &shMemRows[n_tileNodes+1];    // n_tileEdges elements
+  IndexT* shMemWorkspace = &shMemCols[n_tileEdges]; // n_tileNodes + n_tileEdges + 1 elements
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
   typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceT;
 
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
-  const IndexT partNr = blockIdx.x;
-  const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
   for (int k = 0; k < hash_params.len; ++k) {
     Counters total1, max1;
