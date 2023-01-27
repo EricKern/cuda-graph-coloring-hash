@@ -26,6 +26,7 @@ add_subdirectory(tests)
 # google test end =======================================
 
 find_package(nvbench)
+# add_subdirectory(nvbench)
 
 
 add_subdirectory(tiling)
@@ -34,14 +35,21 @@ add_subdirectory(cpumultiply)
 set(Target1Name main-coloring.out)
 add_executable(${Target1Name} main-coloring.cu)
 target_compile_options(${Target1Name} PRIVATE "$<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-G;-src-in-ptx;-Xptxas;-v>")
-target_compile_options(${Target1Name} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;-maxrregcount=64>")
+target_compile_options(${Target1Name} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
 target_include_directories(${Target1Name} PRIVATE "${PROJECT_SOURCE_DIR}/include")
 target_compile_features(${Target1Name} PRIVATE cuda_std_17)
 target_link_libraries(${Target1Name} PRIVATE cusparse tiling cpumultiply)
 
-set(BenchTarget benchmark.out)
-add_executable(${BenchTarget} benchmark/benchmark.cu)
-target_compile_options(${BenchTarget} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;-maxrregcount=64>")
-target_include_directories(${BenchTarget} PRIVATE "${PROJECT_SOURCE_DIR}/include")
-target_link_libraries(${BenchTarget} PRIVATE tiling cpumultiply nvbench::main)
-set_target_properties(${BenchTarget} PROPERTIES COMPILE_FEATURES cuda_std_17)
+# set(BenchTarget benchmark.out)
+# add_executable(${BenchTarget} benchmark/benchmark.cu)
+# target_compile_options(${BenchTarget} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
+# target_include_directories(${BenchTarget} PRIVATE "${PROJECT_SOURCE_DIR}/include")
+# target_link_libraries(${BenchTarget} PRIVATE tiling cpumultiply nvbench::main)
+# set_target_properties(${BenchTarget} PROPERTIES COMPILE_FEATURES cuda_std_17)
+
+
+set(tiling_test tiling_test.out)
+add_executable(${tiling_test} my_tiling/tiling_test.cpp)
+target_include_directories(${tiling_test} PRIVATE ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(${tiling_test} PRIVATE tiling cpumultiply)
+set_target_properties(${tiling_test} PROPERTIES COMPILE_FEATURES cuda_std_17)

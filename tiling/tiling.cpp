@@ -846,6 +846,11 @@ double tiling_partitioning(const int m_rows,
 }
 
 // utility functions
+#include <vector>
+#include <algorithm>
+#include <numeric>
+#include <stdexcept>
+#include <memory>
 
 
 /// @brief 
@@ -903,4 +908,68 @@ void get_MaxTileSize(const int number_of_tiles,
   // Return:
   *maxTileSize = tile_node_max;
   *maxEdges = tile_edge_max;
+}
+
+/// @brief 
+/// @param [in] row_ptr 
+/// @param [in] m_rows 
+/// @param [in] max_tile_size_byte 
+/// @param [out] tile_boundaries 
+/// @param [out] n_tiles 
+/// @param [out] max_node_degree 
+void very_simple_tiling(int* row_ptr,
+                        int m_rows,
+                        int max_tile_size_byte,
+                        std::unique_ptr<int[]>* tile_boundaries,
+                        int* n_tiles,
+                        int* max_node_degree) {
+  int len_row_ptr = m_rows + 1;
+  std::vector<int> n_neighbors(len_row_ptr);
+  auto start1 = row_ptr;
+  auto end1 = row_ptr + len_row_ptr;
+
+  std::adjacent_difference(start1, end1, n_neighbors.begin());
+  // first element of n_neighbors unmodified. Differences starts at first elem
+
+  auto max_idx = std::max_element(n_neighbors.begin() + 1, n_neighbors.end());
+  *max_node_degree = *max_idx;
+
+
+  std::vector<int> boundaries(len_row_ptr); //allocate for worst case
+  boundaries[0] = 0;
+
+  // Iterate over row_ptr and try to fit as many consecutive rows (including
+  // adjacent columns) in one partition so that each partition doesn't exceed
+  // the given memory requirement
+  int current_size = 0;
+  int tile_rows = 0;
+  int tile_cols = 0;
+  int tile_num = 1;
+  for (int i = 1; i < m_rows+1; ++i) {
+    tile_rows = i - boundaries[tile_num - 1];
+    tile_cols += n_neighbors[i];
+    current_size = tile_cols + tile_rows + 1;
+    if (sizeof(int) * current_size > max_tile_size_byte) {
+      if (tile_rows == 1) {
+        std::printf("Error:");
+        throw std::runtime_error(
+            "Cannot fit big row in one tile. Increase tile size for this matrix");
+      }
+      // here we are already one row to big
+      boundaries[tile_num] = i - 1;
+      i -= 1;
+      tile_cols = 0;
+      tile_num += 1;
+    }
+  }
+  // last tile not filled to the maximum
+  if (tile_cols != 0 ) {
+    boundaries[tile_num] = m_rows;
+  }
+  boundaries.resize(tile_num + 1);
+
+  *tile_boundaries = std::make_unique<int[]>(tile_num + 1);
+  std::copy(boundaries.begin(), boundaries.end(), tile_boundaries->get());
+  *n_tiles = tile_num;
+
 }

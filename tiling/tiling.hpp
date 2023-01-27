@@ -6,6 +6,7 @@
  * In case of problems, contact me: r.gutmann@stud.uni-heidelberg.de.
  **/
 #include <cstdint>
+#include <memory>
 
 double // returns time measurement of tiling process (subdivide layers in grouped rows called tiles)
 tiling_partitioning(
@@ -72,3 +73,10 @@ void simple_tiling(const int m_rows, const int number_of_tiles,
 
 void get_MaxTileSize(const int number_of_tiles, const int* const ndc_, const int* const row_ptr,
                      int* maxTileSize, int* maxEdges);
+
+void very_simple_tiling(int* row_ptr,
+                        int m_rows,
+                        int max_tile_size_byte,
+                        std::unique_ptr<int[]>* tile_boundaries,
+                        int* n_tiles,
+                        int* max_node_degree);
