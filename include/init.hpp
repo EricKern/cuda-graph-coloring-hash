@@ -11,6 +11,7 @@ static constexpr int SHMEMLIMIT = 19 * 1024;
 struct Dist{
     int* rowPtr;
     int* colPtr;
+    int* ndc;
     int nTiles;
     int maxNodes;
     int maxEdges;
@@ -26,7 +27,7 @@ int internal_bytes_used2(int max_nodes, int max_edges, bool dist2) {
 }
 
 
-template <int distance = 0, int D1Tiles = 0, int D2Tiles = 0>
+template <int distance = 0, int D1Tiles = 0, int D2Tiles = 0, bool verySimpleTiling = true>
 class Init {
     public:
         static Init* Instance() {
@@ -51,31 +52,49 @@ class Init {
             bool tilesKnown;
             if constexpr (distance != 2){
                 m_rows = cpumultiplyDloadMTX(Mat, &m_dist1.rowPtr, &m_dist1.colPtr, &m_valPtr);
-                tilesKnown = true;
-                int startTilesD1 = D1Tiles;
-                if constexpr (D1Tiles == 0){
-                    tilesKnown = false;
-                    const int cols = m_dist1.rowPtr[m_rows];
-                    int elem_p_block = (SHMEMLIMIT - sizeof(TempStorageT)) / (sizeof(int)) - 1;
+                if constexpr (verySimpleTiling == false){
+                    tilesKnown = true;
+                    int startTilesD1 = D1Tiles;
+                    if constexpr (D1Tiles == 0){
+                        tilesKnown = false;
+                        const int cols = m_dist1.rowPtr[m_rows];
+                        int elem_p_block = (SHMEMLIMIT - sizeof(TempStorageT)) / (sizeof(int)) - 1;
 
-                    auto elements = m_rows + cols;
-                    startTilesD1 = std::ceil(elements / elem_p_block);
+                        auto elements = m_rows + cols;
+                        startTilesD1 = std::ceil(elements / elem_p_block);
+                    }
+                    partition(m_dist1, false, startTilesD1, tilesKnown);
                 }
-                partition(m_dist1, false, startTilesD1, tilesKnown);
+                else{
+                    std::unique_ptr<int[]> boundaries;
+                    very_simple_tiling(m_dist1.rowPtr, m_rows, SHMEMLIMIT, &boundaries, m_dist1.nTiles, nullptr);
+                    m_dist1.ndc = boundaries.release();
+                    get_MaxTileSize(m_dist1.nTiles, m_dist1.ndc, m_dist1.rowPtr, &m_dist1.maxNodes, &m_dist1.maxEdges);
+                    m_dist1.shMemSize = SHMEMLIMIT;
+                }
             }
             if constexpr (distance != 1){
                 m_rows = cpumultiplyDloadMTX(Mat, &m_dist2.rowPtr, &m_dist2.colPtr, &m_valPtr);
-                tilesKnown = true;
-                int startTilesD2 = D2Tiles;
-                if constexpr (D2Tiles == 0){
-                    tilesKnown = false;
-                    const int cols = m_dist1.rowPtr[m_rows];
-                    int elem_p_block = (SHMEMLIMIT - sizeof(TempStorageT)) / (2 * sizeof(int)) - 1;
+                if constexpr (verySimpleTiling == false){
+                    tilesKnown = true;
+                    int startTilesD2 = D2Tiles;
+                    if constexpr (D2Tiles == 0){
+                        tilesKnown = false;
+                        const int cols = m_dist1.rowPtr[m_rows];
+                        int elem_p_block = (SHMEMLIMIT - sizeof(TempStorageT)) / (2 * sizeof(int)) - 1;
 
-                    auto elements = m_rows + cols;
-                    startTilesD2 = std::ceil(elements / elem_p_block);
+                        auto elements = m_rows + cols;
+                        startTilesD2 = std::ceil(elements / elem_p_block);
+                    }
+                    partition(m_dist2, true, startTilesD2, tilesKnown);
                 }
-                partition(m_dist2, true, startTilesD2, tilesKnown);
+                else{
+                    std::unique_ptr<int[]> boundaries;
+                    very_simple_tiling(m_dist2.rowPtr, m_rows, SHMEMLIMIT, &boundaries, m_dist2.nTiles, nullptr);
+                    m_dist2.ndc = boundaries.release();
+                    get_MaxTileSize(m_dist2.nTiles, m_dist2.ndc, m_dist2.rowPtr, &m_dist2.maxNodes, &m_dist2.maxEdges);
+                    m_dist1.shMemSize = SHMEMLIMIT;
+                }
             }
         }
         ~Init() {
@@ -86,11 +105,10 @@ class Init {
             Dist tmpDist = distStruct;
             int* slices;
             int* offsets;
-            int* ndc;
-            simple_tiling(m_rows, startTiles, tmpDist.rowPtr, tmpDist.colPtr, &slices, &ndc, &offsets);
+            simple_tiling(m_rows, startTiles, tmpDist.rowPtr, tmpDist.colPtr, &slices, &tmpDist.ndc, &offsets);
             if (!tilesKnown) {
                 int shMemSize;
-                get_MaxTileSize(tmpDist.nTiles, ndc, tmpDist.rowPtr, &tmpDist.maxNodes, &tmpDist.maxEdges);
+                get_MaxTileSize(tmpDist.nTiles, tmpDist.ndc, tmpDist.rowPtr, &tmpDist.maxNodes, &tmpDist.maxEdges);
                 shMemSize = internal_bytes_used2(tmpDist.maxNodes, tmpDist.maxEdges, dist2)
                                 + sizeof(TempStorageT);
                 
@@ -98,22 +116,21 @@ class Init {
                     delete[] slices;
 	                delete[] offsets;
 	                startTiles += STEPS;
-	                simple_tiling(m_rows, startTiles, tmpDist.rowPtr, tmpDist.colPtr, &slices, &ndc, &offsets);
-	                get_MaxTileSize(startTiles, ndc, tmpDist.rowPtr, &tmpDist.maxNodes, &tmpDist.maxEdges);
+	                simple_tiling(m_rows, startTiles, tmpDist.rowPtr, tmpDist.colPtr, &slices, &tmpDist.ndc, &offsets);
+	                get_MaxTileSize(startTiles, tmpDist.ndc, tmpDist.rowPtr, &tmpDist.maxNodes, &tmpDist.maxEdges);
                     shMemSize = internal_bytes_used2(tmpDist.maxNodes, tmpDist.maxEdges, dist2)
                                             + sizeof(TempStorageT);
                 }
             }
             tmpDist.nTiles = startTiles;
-            cpumultiplyDpermuteMatrix(tmpDist.nTiles, 1, ndc, slices, tmpDist.rowPtr, tmpDist.colPtr,
+            cpumultiplyDpermuteMatrix(tmpDist.nTiles, 1, tmpDist.ndc, slices, tmpDist.rowPtr, tmpDist.colPtr,
                                      m_valPtr, &tmpDist.rowPtr, &tmpDist.colPtr, &m_valPtr, true);
-            get_MaxTileSize(tmpDist.nTiles, ndc, tmpDist.rowPtr, &tmpDist.maxNodes, &tmpDist.maxEdges);
+            get_MaxTileSize(tmpDist.nTiles, tmpDist.ndc, tmpDist.rowPtr, &tmpDist.maxNodes, &tmpDist.maxEdges);
             tmpDist.shMemSize = internal_bytes_used2(tmpDist.maxNodes, tmpDist.maxEdges, dist2)
                                 + sizeof(TempStorageT);
             
             distStruct = tmpDist;
             delete[] slices;
-            delete[] ndc;
             delete[] offsets;
         }
 
