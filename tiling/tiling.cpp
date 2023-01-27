@@ -965,7 +965,6 @@ void very_simple_tiling(int* row_ptr,
   // last tile not filled to the maximum
   if (tile_cols != 0 ) {
     boundaries[tile_num] = m_rows;
-    tile_num += 1;
   }
   boundaries.resize(tile_num + 1);
 
