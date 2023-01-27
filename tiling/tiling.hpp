@@ -71,8 +71,13 @@ void simple_tiling(const int m_rows, const int number_of_tiles,
                    int** const ndc_dptr,
                    int** const offsets_dptr);
 
-void get_MaxTileSize(const int number_of_tiles, const int* const ndc_, const int* const row_ptr,
-                     int* maxTileSize, int* maxEdges);
+void get_MaxTileSize(const int number_of_tiles,
+                     const int* const ndc_,
+                     const int* const row_ptr,
+					 int* biggest_tileNodes,
+					 int* biggest_tileEdges,
+                     int* maxTileSize,
+                     int* maxEdges);
 
 void very_simple_tiling(int* row_ptr,
                         int m_rows,

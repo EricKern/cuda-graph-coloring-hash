@@ -18,6 +18,8 @@ class GPUSetupD1 {
   int n_tiles;
   int max_nodes;
   int max_edges;
+  int biggest_tile_nodes;
+  int biggest_tile_edges;
 
   //
   int* d_row_ptr;
@@ -39,7 +41,7 @@ class GPUSetupD1 {
 };
 
 int GPUSetupD1::calc_shMem(){
-  return (max_nodes + 1 + max_edges) * sizeof(int);
+  return (biggest_tile_nodes + 1 + biggest_tile_edges) * sizeof(int);
 }
 
 // only constructor
@@ -54,7 +56,8 @@ GPUSetupD1::GPUSetupD1(int* row_ptr,
   this->col_ptr_len = row_ptr[m_rows];
   this->tile_bound_len = n_tiles + 1;
 
-  get_MaxTileSize(n_tiles, tile_boundaries, row_ptr, &max_nodes, &max_edges);
+  get_MaxTileSize(n_tiles, tile_boundaries, row_ptr,
+                  &biggest_tile_nodes, &biggest_tile_edges, &max_nodes, &max_edges);
 
   //==================================================
   // Allocate memory for partitioned matrix on device
@@ -142,7 +145,7 @@ class GPUSetupD2 : public GPUSetupD1{
 
 
 int GPUSetupD2::calc_shMem() {
-  return (max_nodes + 1 + max_edges) * sizeof(int) * 2;
+  return (biggest_tile_nodes + 1 + biggest_tile_edges) * sizeof(int) * 2;
 }
   
 GPUSetupD2::GPUSetupD2(int* row_ptr,

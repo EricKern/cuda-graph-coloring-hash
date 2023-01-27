@@ -35,26 +35,28 @@ void printResult(const apa22_coloring::Counters& sum,
 int main(int argc, char const *argv[]) {
   using namespace apa22_coloring;
 
-  constexpr int MAX_THREADS_SM = 1024;  // Turing 2080ti
+  constexpr int MAX_THREADS_SM = 1024;  // Turing (2080ti)
   constexpr int BLK_SM = 4;
   constexpr int THREADS = MAX_THREADS_SM/BLK_SM;
 
   int devId, MaxShmemSizeSM;
   cudaGetDevice(&devId);
-
-  cudaDeviceGetAttribute(&MaxShmemSizeSM, cudaDevAttrMaxSharedMemoryPerBlockOptin, devId);
+  // On Turing 64 kB Shmem hard Cap with 32kB L1
+  cudaDeviceGetAttribute(&MaxShmemSizeSM, cudaDevAttrMaxSharedMemoryPerMultiprocessor, devId);
   cudaFuncAttributes a;
   cudaFuncGetAttributes(&a, (const void*)coloring1Kernel<int, THREADS, BLK_SM>);
-  std::printf("a.sharedSizeBytes: %d\n", a.sharedSizeBytes);
+  // MaxShmemSizeSM /= 2;
 
-  int const max_dyn_SM = MaxShmemSizeSM - a.sharedSizeBytes * BLK_SM; // 64 KBs
+  // Starting with CC 8.0, cuda runtime needs 1KB shMem per block
+  int const static_shMem_SM = a.sharedSizeBytes * BLK_SM; 
+  int const max_dyn_SM = MaxShmemSizeSM - static_shMem_SM;
   
-
-  cudaFuncSetAttribute(coloring1Kernel<int, THREADS, BLK_SM>, cudaFuncAttributePreferredSharedMemoryCarveout, 50);
+  // cudaFuncSetAttribute(coloring1Kernel<int, THREADS, BLK_SM>, cudaFuncAttributePreferredSharedMemoryCarveout, 100);
   cudaFuncSetAttribute(coloring1Kernel<int, THREADS, BLK_SM>,
                       cudaFuncAttributeMaxDynamicSharedMemorySize, max_dyn_SM);
 
   std::printf("MaxShmemSizeSM: %d\n", MaxShmemSizeSM);
+  std::printf("a.sharedSizeBytes: %d\n", a.sharedSizeBytes);
   std::printf("a.sharedSizeBytes * BLK_SM: %d\n", a.sharedSizeBytes * BLK_SM);
   std::printf("max_dyn_SM: %d\n", max_dyn_SM);
 
@@ -70,7 +72,8 @@ int main(int argc, char const *argv[]) {
   std::unique_ptr<int[]> tile_boundaries; // array with indices of each tile in all slices
   int n_tiles;
   int max_node_degree;
-  very_simple_tiling(row_ptr, m_rows, max_dyn_SM/BLK_SM, &tile_boundaries, &n_tiles, &max_node_degree);
+  int tile_mem = max_dyn_SM/BLK_SM;
+  very_simple_tiling(row_ptr, m_rows, tile_mem, &tile_boundaries, &n_tiles, &max_node_degree);
 
   #if DIST2
   GPUSetupD2 gpu_setup(row_ptr, col_ptr, tile_boundaries.get(), n_tiles);
@@ -79,11 +82,12 @@ int main(int argc, char const *argv[]) {
   #endif
 
   std::printf("Nr_tiles: %d\n", gpu_setup.n_tiles);
-  std::printf("shMem: %d\n", gpu_setup.calc_shMem());
+  std::printf("Smem target tiling: %d\n", tile_mem);
+  std::printf("Actual Dyn shMem: %d\n", gpu_setup.calc_shMem());
   std::printf("M-row %d\n", m_rows);
 
-  std::printf("max node: %d\n", gpu_setup.max_nodes);
-  std::printf("max edges: %d\n", gpu_setup.max_edges);
+  std::printf("biggest_tile_nodes: %d\n", gpu_setup.biggest_tile_nodes);
+  std::printf("biggest_tile_edges: %d\n", gpu_setup.biggest_tile_edges);
   
   // calc shMem
   size_t shMem_bytes = gpu_setup.calc_shMem();

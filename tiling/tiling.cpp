@@ -881,33 +881,49 @@ void simple_tiling(const int m_rows, const int number_of_tiles,
   delete[] layers_;
 }
 
+
 /// @brief 
-/// @param [in] number_of_tiles 	:
-/// @param [in] ndc_ 				:	indices separating the matrix in tiles
-/// @param [in] row_ptr 			:	where ndc_ points to. Points to col_indices
-/// @param [out] maxTileSize 		:	maximum nr of nodes in a tile
-/// @param [out] maxEdges 			:	max length of col_ptr array in a tile
+/// @param [in] number_of_tiles 		:
+/// @param [in] ndc_ 					: indices separating the matrix in tiles
+/// @param [in] row_ptr 				: where ndc_ points to. Points to col_indices
+/// @param [out] biggest_tileNodes  	: nr nodes in biggest tile
+/// @param [out] biggest_tileEdges  	: nr edges in biggest tile
+/// @param [out] maxTileSize 			: maximum nr of nodes in any tile
+/// @param [out] maxEdges 				: max length of col_ptr array in any tile
 void get_MaxTileSize(const int number_of_tiles,
                      const int* const ndc_,
                      const int* const row_ptr,
+					 int* biggest_tileNodes,
+					 int* biggest_tileEdges,
                      int* maxTileSize,
                      int* maxEdges) {
-  int tile_node_max = 0;
-  int tile_edge_max = 0;
+  int biggest_tile_nodes = 0;
+  int biggest_tile_edges = 0;
+  int max_nodes = 0;
+  int max_edges = 0;
   // go over tiles
   for (int tile_nr = number_of_tiles; tile_nr > 0; --tile_nr) {
     // calculate tile size
     int tile_sz = ndc_[tile_nr] - ndc_[tile_nr - 1];
-    if (tile_sz > tile_node_max)  // if tile size is bigger than the maximal one
-      tile_node_max = tile_sz;    // overwintrite the maximal value
-
     int tile_edges = row_ptr[ndc_[tile_nr]] - row_ptr[ndc_[tile_nr - 1]];
-    if (tile_edges > tile_edge_max)
-      tile_edge_max = tile_edges;
+
+    if (tile_edges + tile_sz > biggest_tile_nodes + biggest_tile_edges) {
+      biggest_tile_nodes = tile_sz;
+      biggest_tile_edges = tile_edges;
+	}
+	if (tile_sz > max_nodes) {
+      max_nodes = tile_sz;
+	}
+	if (tile_edges > max_edges) {
+      max_edges = tile_edges;
+	}
   }
   // Return:
-  *maxTileSize = tile_node_max;
-  *maxEdges = tile_edge_max;
+  *maxTileSize = max_nodes;
+  *maxEdges = max_edges;
+  *biggest_tileNodes = biggest_tile_nodes;
+  *biggest_tileEdges = biggest_tile_edges;
+
 }
 
 /// @brief 
