@@ -26,6 +26,7 @@ add_subdirectory(tests)
 # google test end =======================================
 
 find_package(nvbench)
+# add_subdirectory(nvbench)
 
 
 add_subdirectory(tiling)
@@ -45,3 +46,10 @@ target_compile_options(${BenchTarget} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPI
 target_include_directories(${BenchTarget} PRIVATE "${PROJECT_SOURCE_DIR}/include")
 target_link_libraries(${BenchTarget} PRIVATE tiling cpumultiply nvbench::main)
 set_target_properties(${BenchTarget} PROPERTIES COMPILE_FEATURES cuda_std_17)
+
+
+set(tiling_test tiling_test.out)
+add_executable(${tiling_test} my_tiling/tiling_test.cpp)
+target_include_directories(${tiling_test} PRIVATE ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(${tiling_test} PRIVATE tiling cpumultiply)
+set_target_properties(${tiling_test} PROPERTIES COMPILE_FEATURES cuda_std_17)
