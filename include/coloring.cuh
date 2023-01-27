@@ -1,12 +1,5 @@
 #pragma once
-// 1. copy permuted matrix to device
-//    (In the following: tile = partition)
-//    tile_boundaries: array of indices giving the starting index of each partition.
-//    Partitions are internally grouped. Starting with tile-edge nodes
-//    followed by intra-tile nodes
 
-//    intra_tile_sep: array of indices giving the starting index of the first
-//    intra-tile node in each partition.
 #include <cooperative_groups.h>
 #include <hash.cuh>
 #include <cstdint>    // for mask
@@ -144,8 +137,12 @@ void D1LastReduction(SOACounters* soa, Counters* out_counters, ReductionOp op,
 
 __device__ unsigned int retirementCount = 0;
 
-template <typename IndexT>
+template <typename IndexT,
+          int THREADS,
+          int BLK_SM,
+          cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
+__launch_bounds__(THREADS, BLK_SM)
 void coloring1Kernel(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
@@ -309,8 +306,12 @@ void D2CollisionsLocal(IndexT* shMemRows,
 }
 
 
-template <typename IndexT>
+template <typename IndexT,
+          int THREADS,
+          int BLK_SM,
+          cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
+__launch_bounds__(THREADS, BLK_SM)
 void coloring2Kernel(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,

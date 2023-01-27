@@ -11,7 +11,7 @@
 #include <asc.cuh>
 
 #include <defines.hpp>
-#include <kernel_setup.hpp>
+// #include <kernel_setup.hpp>
 #include <coloringCounters.cuh>
 
 #include <cpu_coloring.hpp>
@@ -35,39 +35,55 @@ void printResult(const apa22_coloring::Counters& sum,
 int main(int argc, char const *argv[]) {
   using namespace apa22_coloring;
 
+  constexpr int MAX_THREADS_SM = 1024;  // Turing 2080ti
+  constexpr int BLK_SM = 4;
+  constexpr int THREADS = MAX_THREADS_SM/BLK_SM;
+
+  int devId, MaxShmemSizeSM;
+  cudaGetDevice(&devId);
+
+  cudaDeviceGetAttribute(&MaxShmemSizeSM, cudaDevAttrMaxSharedMemoryPerBlockOptin, devId);
+  cudaFuncAttributes a;
+  cudaFuncGetAttributes(&a, (const void*)coloring1Kernel<int, THREADS, BLK_SM>);
+  std::printf("a.sharedSizeBytes: %d\n", a.sharedSizeBytes);
+
+  int const max_dyn_SM = MaxShmemSizeSM - a.sharedSizeBytes * BLK_SM; // 64 KBs
+  
+
+  cudaFuncSetAttribute(coloring1Kernel<int, THREADS, BLK_SM>, cudaFuncAttributePreferredSharedMemoryCarveout, 50);
+  cudaFuncSetAttribute(coloring1Kernel<int, THREADS, BLK_SM>,
+                      cudaFuncAttributeMaxDynamicSharedMemorySize, max_dyn_SM);
+
+  std::printf("MaxShmemSizeSM: %d\n", MaxShmemSizeSM);
+  std::printf("a.sharedSizeBytes * BLK_SM: %d\n", a.sharedSizeBytes * BLK_SM);
+  std::printf("max_dyn_SM: %d\n", max_dyn_SM);
+
   int mat_nr = 2;          //Default value
   chCommandLineGet<int>(&mat_nr, "m", argc, argv);
-
-  const char* inputMat = def::Mat3_Cluster;
+  auto Mat = def::choseMat(mat_nr);
 
   int* row_ptr;
   int* col_ptr;
-  double* val_ptr;  // create pointers for matrix in csr format
-  int m_rows;
+  double* val_ptr;
+  int m_rows = cpumultiplyDloadMTX(Mat, &row_ptr, &col_ptr, &val_ptr);
 
-  int* ndc_;     // array with indices of each tile in all slices
-
-  int number_of_tiles;
-  int shMem_size_bytes;
-
-  #if DIST2
-  kernel_setup<true>(inputMat, row_ptr, col_ptr, val_ptr, ndc_, m_rows, number_of_tiles, shMem_size_bytes, 300);
-  #else
-  kernel_setup(inputMat, row_ptr, col_ptr, val_ptr, ndc_, m_rows, number_of_tiles, shMem_size_bytes, 300);
-  #endif
+  std::unique_ptr<int[]> tile_boundaries; // array with indices of each tile in all slices
+  int n_tiles;
+  int max_node_degree;
+  very_simple_tiling(row_ptr, m_rows, max_dyn_SM/BLK_SM, &tile_boundaries, &n_tiles, &max_node_degree);
 
   #if DIST2
-  GPUSetupD2 gpu_setup(row_ptr, col_ptr, ndc_, number_of_tiles);
+  GPUSetupD2 gpu_setup(row_ptr, col_ptr, tile_boundaries.get(), n_tiles);
   #else
-  GPUSetupD1 gpu_setup(row_ptr, col_ptr, ndc_, number_of_tiles);
+  GPUSetupD1 gpu_setup(row_ptr, col_ptr, tile_boundaries.get(), n_tiles);
   #endif
 
   std::printf("Nr_tiles: %d\n", gpu_setup.n_tiles);
   std::printf("shMem: %d\n", gpu_setup.calc_shMem());
   std::printf("M-row %d\n", m_rows);
 
-  std::printf("node: %d\n", gpu_setup.max_nodes);
-  std::printf("edges: %d\n", gpu_setup.max_edges);
+  std::printf("max node: %d\n", gpu_setup.max_nodes);
+  std::printf("max edges: %d\n", gpu_setup.max_edges);
   
   // calc shMem
   size_t shMem_bytes = gpu_setup.calc_shMem();
@@ -75,29 +91,33 @@ int main(int argc, char const *argv[]) {
   dim3 blockSize(THREADS);
 
 #if DIST2
-  coloring2Kernel<<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
-                                                        gpu_setup.d_col_ptr,
-                                                        gpu_setup.d_tile_boundaries,
-                                                        gpu_setup.max_nodes,
-                                                        gpu_setup.max_edges,
-                                                        gpu_setup.d_soa_total1,
-                                                        gpu_setup.d_soa_max1,
-                                                        gpu_setup.d_soa_total2,
-                                                        gpu_setup.d_soa_max2,
-                                                        gpu_setup.d_total1,
-                                                        gpu_setup.d_max1,
-                                                        gpu_setup.d_total2,
-                                                        gpu_setup.d_max2);
+  coloring2Kernel<int, THREADS, BLK_SM>
+  <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
+                                         gpu_setup.d_col_ptr,
+                                         gpu_setup.d_tile_boundaries,
+                                         gpu_setup.max_nodes,
+                                         gpu_setup.max_edges,
+                                         gpu_setup.d_soa_total1,
+                                         gpu_setup.d_soa_max1,
+                                         gpu_setup.d_soa_total2,
+                                         gpu_setup.d_soa_max2,
+                                         gpu_setup.d_total1,
+                                         gpu_setup.d_max1,
+                                         gpu_setup.d_total2,
+                                         gpu_setup.d_max2);
 #else
-  coloring1Kernel<<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
-                                                        gpu_setup.d_col_ptr,
-                                                        gpu_setup.d_tile_boundaries,
-                                                        gpu_setup.max_nodes,
-                                                        gpu_setup.max_edges,
-                                                        gpu_setup.d_soa_total1,
-                                                        gpu_setup.d_soa_max1,
-                                                        gpu_setup.d_total1,
-                                                        gpu_setup.d_max1);
+  // int maxbytes = 98304; // 96 KB
+  // cudaFuncSetAttribute(coloring1Kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, maxbytes);
+  coloring1Kernel<int, THREADS, BLK_SM>
+  <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
+                                         gpu_setup.d_col_ptr,
+                                         gpu_setup.d_tile_boundaries,
+                                         gpu_setup.max_nodes,
+                                         gpu_setup.max_edges,
+                                         gpu_setup.d_soa_total1,
+                                         gpu_setup.d_soa_max1,
+                                         gpu_setup.d_total1,
+                                         gpu_setup.d_max1);
 #endif
   cudaDeviceSynchronize();
 
@@ -128,8 +148,8 @@ int main(int argc, char const *argv[]) {
 
   Counters cpu_max1, cpu_total1;
   cpu_dist1(row_ptr, col_ptr, m_rows, &cpu_total1, &cpu_max1);
-  std::printf("CPU dist 1 results\n");
-  printResult(cpu_total1, cpu_max1);
+  // std::printf("CPU dist 1 results\n");
+  // printResult(cpu_total1, cpu_max1);
 
 #if DIST2
     Counters cpu_max2, cpu_total2;
@@ -163,6 +183,5 @@ int main(int argc, char const *argv[]) {
 	delete[] row_ptr;
 	delete[] col_ptr;
 	delete[] val_ptr;
-	delete[] ndc_;
   return 0;
 }
