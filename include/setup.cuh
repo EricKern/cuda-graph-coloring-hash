@@ -111,8 +111,8 @@ Tiling<dist, THREADS, BLK_SM, print>::Tiling(int* row_ptr, int m_rows) {
 
   if constexpr (print) {
     std::printf("MaxShmemSizeSM: %d\n", MaxShmemSizeSM);
-    std::printf("Static sharedSizeBytes Block: %d\n", a.sharedSizeBytes);
-    std::printf("Static sharedSizeBytes SM: %d\n", a.sharedSizeBytes * BLK_SM);
+    std::printf("Static sharedSizeBytes Block: %ld\n", a.sharedSizeBytes);
+    std::printf("Static sharedSizeBytes SM: %ld\n", a.sharedSizeBytes * BLK_SM);
     std::printf("max_dyn_SM: %d\n", max_dyn_SM);
   }
 
