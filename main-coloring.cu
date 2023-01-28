@@ -38,71 +38,42 @@ int main(int argc, char const *argv[]) {
   constexpr int MAX_THREADS_SM = 1024;  // Turing (2080ti)
   constexpr int BLK_SM = 4;
   constexpr int THREADS = MAX_THREADS_SM/BLK_SM;
-  #if DIST2
-  auto kernel = coloring2Kernel<int, THREADS, BLK_SM>;
-  #else
-  auto kernel = coloring1Kernel<int, THREADS, BLK_SM>;
-  #endif
-
-  int devId, MaxShmemSizeSM;
-  cudaGetDevice(&devId);
-  cudaDeviceGetAttribute(&MaxShmemSizeSM, cudaDevAttrMaxSharedMemoryPerMultiprocessor, devId);
-  // On Turing 64 kB Shmem hard Cap with 32kB L1.
-  // There are other predefined "carveout" levels that might also be an option
-  // if more L1 cache seems usefull (on Turing just 32kB).
-  // MaxShmemSizeSM /= 2;
-  cudaFuncAttributes a;
-  cudaFuncGetAttributes(&a, kernel);
-
-  // Starting with CC 8.0, cuda runtime needs 1KB shMem per block
-  int const static_shMem_SM = a.sharedSizeBytes * BLK_SM; 
-  int const max_dyn_SM = MaxShmemSizeSM - static_shMem_SM;
-  
-  // cudaFuncSetAttribute(kernel, cudaFuncAttributePreferredSharedMemoryCarveout, 100);
-  cudaFuncSetAttribute(kernel,
-                      cudaFuncAttributeMaxDynamicSharedMemorySize, max_dyn_SM);
-
-  std::printf("MaxShmemSizeSM: %d\n", MaxShmemSizeSM);
-  std::printf("a.sharedSizeBytes: %d\n", a.sharedSizeBytes);
-  std::printf("a.sharedSizeBytes * BLK_SM: %d\n", a.sharedSizeBytes * BLK_SM);
-  std::printf("max_dyn_SM: %d\n", max_dyn_SM);
 
   int mat_nr = 2;          //Default value
   chCommandLineGet<int>(&mat_nr, "m", argc, argv);
   auto Mat = def::choseMat(mat_nr);
 
-  int* row_ptr;
-  int* col_ptr;
-  double* val_ptr;
-  int m_rows = cpumultiplyDloadMTX(Mat, &row_ptr, &col_ptr, &val_ptr);
-
-  std::unique_ptr<int[]> tile_boundaries; // array with indices of each tile in all slices
-  int n_tiles;
-  int max_node_degree;
   #if DIST2
-  int tile_mem = (max_dyn_SM/BLK_SM)/2;
+  MatLoader& mat_loader = MatLoader::getInstance(Mat);
+  Tiling<D2, THREADS, BLK_SM, true> tiling(mat_loader.row_ptr,
+                                           mat_loader.m_rows);
+  GPUSetupD2 gpu_setup(mat_loader.row_ptr,
+                       mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(),
+                       tiling.n_tiles);
   #else
-  int tile_mem = max_dyn_SM/BLK_SM;
-  #endif
-  very_simple_tiling(row_ptr, m_rows, tile_mem, &tile_boundaries, &n_tiles, &max_node_degree);
-
-  #if DIST2
-  GPUSetupD2 gpu_setup(row_ptr, col_ptr, tile_boundaries.get(), n_tiles);
-  #else
-  GPUSetupD1 gpu_setup(row_ptr, col_ptr, tile_boundaries.get(), n_tiles);
+  MatLoader& mat_loader = MatLoader::getInstance(Mat);
+  Tiling<D1, THREADS, BLK_SM, true> tiling(mat_loader.row_ptr,
+                                           mat_loader.m_rows);
+  GPUSetupD1 gpu_setup(mat_loader.row_ptr,
+                       mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(),
+                       tiling.n_tiles);
   #endif
 
-  std::printf("Nr_tiles: %d\n", gpu_setup.n_tiles);
-  std::printf("Smem target tiling: %d\n", tile_mem);
-  std::printf("Actual Dyn shMem: %d\n", gpu_setup.calc_shMem());
-  std::printf("M-row %d\n", m_rows);
+  std::printf("M-row %d\n", mat_loader.m_rows);
+  std::printf("Nr_tiles: %d\n", tiling.n_tiles);
+  std::printf("Shmem target tiling mem: %d\n", tiling.tile_target_mem);
+  std::printf("Actual Dyn shMem: %d\n", tiling.calc_shMem());
 
-  std::printf("biggest_tile_nodes: %d\n", gpu_setup.biggest_tile_nodes);
-  std::printf("biggest_tile_edges: %d\n", gpu_setup.biggest_tile_edges);
+  std::printf("biggest_tile_nodes: %d\n", tiling.biggest_tile_nodes);
+  std::printf("biggest_tile_edges: %d\n", tiling.biggest_tile_edges);
+  std::printf("max nodes in any tile: %d\n", tiling.max_nodes);
+  std::printf("max edges in any tile: %d\n", tiling.max_edges);
   
   // calc shMem
-  size_t shMem_bytes = gpu_setup.calc_shMem();
-  dim3 gridSize(gpu_setup.n_tiles);
+  size_t shMem_bytes = tiling.calc_shMem();
+  dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
 #if DIST2
@@ -110,7 +81,7 @@ int main(int argc, char const *argv[]) {
   <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
                                          gpu_setup.d_col_ptr,
                                          gpu_setup.d_tile_boundaries,
-                                         tile_mem,
+                                         tiling.tile_target_mem,
                                          gpu_setup.d_soa_total1,
                                          gpu_setup.d_soa_max1,
                                          gpu_setup.d_soa_total2,
@@ -157,33 +128,19 @@ int main(int argc, char const *argv[]) {
 #endif
 
   Counters cpu_max1, cpu_total1;
-  cpu_dist1(row_ptr, col_ptr, m_rows, &cpu_total1, &cpu_max1);
+  cpu_dist1(mat_loader.row_ptr, mat_loader.col_ptr, mat_loader.m_rows,
+            hash_params.val[0], &cpu_total1, &cpu_max1);
   std::printf("CPU dist 1 results\n");
   printResult(cpu_total1, cpu_max1);
 
 #if DIST2
     Counters cpu_max2, cpu_total2;
-    cpuDist2(row_ptr, col_ptr, m_rows, max_node_degree, &cpu_total2, &cpu_max2);
-    
+    cpuDist2(mat_loader.row_ptr, mat_loader.col_ptr, mat_loader.m_rows,
+             tiling.max_node_degree, hash_params.val[0], &cpu_total2, &cpu_max2);
+
     std::printf("CPU dist 2 results\n");
     printResult(cpu_total2, cpu_max2);
 #endif
 
-  // thrust::host_vector<int> row(row_ptr, row_ptr + m_rows + 1);
-  // thrust::host_vector<int> col(col_ptr, col_ptr + row_ptr[m_rows]);
-  // thrust::host_vector<double> nnz(val_ptr, val_ptr + row_ptr[m_rows]);
-  
-  // thrust::device_vector<int> d_row = row;
-  // thrust::device_vector<int> d_col = col;
-  // thrust::device_vector<double> d_nnz = nnz;
-
-  // namespace asc18 = asc_hash_graph_coloring;
-  // asc18::cusparse_distance1(d_nnz, d_row, d_col, 1);
-
-  // delete total;
-  // delete max;
-	delete[] row_ptr;
-	delete[] col_ptr;
-	delete[] val_ptr;
   return 0;
 }

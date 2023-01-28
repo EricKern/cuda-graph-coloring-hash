@@ -11,6 +11,7 @@ template <typename IndexType>
 void cpu_dist1(const IndexType* row_ptr,  // global mem
                const IndexType* col_ptr,  // global mem
                const IndexType numNodes,
+               const int k_param,
                Counters* result_total,
                Counters* result_max){
   // Counters for the total number of collisions and the max nr of collisions
@@ -25,13 +26,13 @@ void cpu_dist1(const IndexType* row_ptr,  // global mem
     const IndexType row_begin = row_ptr[i];
     const IndexType row_end = row_ptr[i + 1];
 
-    auto const row_hash = hash(glob_row, static_k_param);
+    auto const row_hash = hash(glob_row, k_param);
 
     for (auto col_idx = row_begin; col_idx < row_end; ++col_idx) {
       const IndexType col = col_ptr[col_idx];
 
       if (col != glob_row) {  // skip connection to node itself
-        auto const col_hash = hash(col, static_k_param);
+        auto const col_hash = hash(col, k_param);
 
         for (auto counter_idx = 0; counter_idx < num_bit_widths; ++counter_idx) {
           auto shift_val = start_bit_width + counter_idx;
@@ -63,6 +64,7 @@ void cpuDist2(const IndexType* row_ptr,  // global mem
                const IndexType* col_ptr,  // global mem
                const IndexType numNodes,
                const IndexType max_node_degree,
+               const int k_param,
                Counters* result_total,
                Counters* result_max){
   // Counters for the total number of collisions and the max nr of collisions
@@ -83,14 +85,14 @@ void cpuDist2(const IndexType* row_ptr,  // global mem
     const IndexType row_begin = row_ptr[i];
     const IndexType row_end = row_ptr[i + 1];
 
-    workspace[0] = hash(glob_row, static_k_param);
+    workspace[0] = hash(glob_row, k_param);
 
     IndexType j = 1;
     for (auto col_idx = row_begin; col_idx < row_end; ++col_idx) {
       const IndexType col = col_ptr[col_idx];
 
       if (col != glob_row) {  // skip connection to node itself
-        workspace[j] = hash(col, static_k_param);
+        workspace[j] = hash(col, k_param);
         ++j;
       }
     }

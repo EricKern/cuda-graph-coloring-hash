@@ -235,9 +235,9 @@ void D2CollisionsLocal(IndexT* shMemRows,
 		IndexT row_end = shMemRows[i + 1];
 
     const int thread_ws_begin = i + row_begin - shMemRows[0];
-    const int thread_ws_end = i + row_end - shMemRows[0];
+    // const int thread_ws_end = i + row_end - shMemRows[0];
+    // const int thread_ws_len = thread_ws_end - thread_ws_begin;
 
-    int thread_ws_len = thread_ws_end - thread_ws_begin;
     IndexT* thread_ws = shMemWorkspace + thread_ws_begin;
 
     thread_ws[0] = __brev(hash(glob_row, hash_param));
