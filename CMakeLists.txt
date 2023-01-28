@@ -40,12 +40,12 @@ target_include_directories(${Target1Name} PRIVATE "${PROJECT_SOURCE_DIR}/include
 target_compile_features(${Target1Name} PRIVATE cuda_std_17)
 target_link_libraries(${Target1Name} PRIVATE cusparse tiling cpumultiply)
 
-# set(BenchTarget benchmark.out)
-# add_executable(${BenchTarget} benchmark/benchmark.cu)
-# target_compile_options(${BenchTarget} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
-# target_include_directories(${BenchTarget} PRIVATE "${PROJECT_SOURCE_DIR}/include")
-# target_link_libraries(${BenchTarget} PRIVATE tiling cpumultiply nvbench::main)
-# set_target_properties(${BenchTarget} PROPERTIES COMPILE_FEATURES cuda_std_17)
+set(BenchTarget numBlocks_bench.out)
+add_executable(${BenchTarget} benchmark/numBlocks_bench.cu)
+target_compile_options(${BenchTarget} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
+target_include_directories(${BenchTarget} PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_link_libraries(${BenchTarget} PRIVATE tiling cpumultiply nvbench::main)
+set_target_properties(${BenchTarget} PROPERTIES COMPILE_FEATURES cuda_std_17)
 
 
 set(tiling_test tiling_test.out)
