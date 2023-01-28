@@ -16,7 +16,7 @@
 
 #include <cpu_coloring.hpp>
 
-#define DIST2 1
+#define DIST2 0
 
 void printResult(const apa22_coloring::Counters& sum,
                  const apa22_coloring::Counters& max) {
@@ -36,7 +36,7 @@ int main(int argc, char const *argv[]) {
   using namespace apa22_coloring;
 
   constexpr int MAX_THREADS_SM = 1024;  // Turing (2080ti)
-  constexpr int BLK_SM = 4;
+  constexpr int BLK_SM = 2;
   constexpr int THREADS = MAX_THREADS_SM/BLK_SM;
 
   int mat_nr = 2;          //Default value
@@ -45,16 +45,20 @@ int main(int argc, char const *argv[]) {
 
   #if DIST2
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling<D2, THREADS, BLK_SM, true> tiling(mat_loader.row_ptr,
-                                           mat_loader.m_rows);
+  Tiling tiling(D2, BLK_SM,
+                mat_loader.row_ptr,
+                mat_loader.m_rows,
+                (void*)coloring2Kernel<int, THREADS, BLK_SM>);
   GPUSetupD2 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
   #else
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling<D1, THREADS, BLK_SM, true> tiling(mat_loader.row_ptr,
-                                           mat_loader.m_rows);
+  Tiling tiling(D1, BLK_SM,
+                mat_loader.row_ptr,
+                mat_loader.m_rows,
+                (void*)coloring1Kernel<int, THREADS, BLK_SM>);
   GPUSetupD1 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
                        tiling.tile_boundaries.get(),

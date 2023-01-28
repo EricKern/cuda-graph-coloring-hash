@@ -45,15 +45,12 @@ class MatLoader {
 };
 
 
-template <Distance dist,
-          int THREADS,
-          int BLK_SM,
-          bool print = false>
 class Tiling {
  public:
   Tiling(const Tiling&) = delete;
   Tiling& operator=(const Tiling&) = delete;
 
+  Distance dist;
   std::unique_ptr<int[]> tile_boundaries; // array with indices of each tile in all slices
   int n_tiles;
   int tile_target_mem;  // bytes
@@ -66,36 +63,45 @@ class Tiling {
   int biggest_tile_edges;     // maximum in the biggest node
 
   int calc_shMem(); // returns how much shmem must be dynamically allocated (in bytes)
-  Tiling(int* row_ptr, int m_rows);
+  Tiling(Distance dist,
+         int BLK_SM,
+         int* row_ptr,
+         int m_rows,
+         void* kernel,
+         int max_smem_SM = -1,
+         bool print = false);
 };
 
-template <Distance dist, int THREADS, int BLK_SM, bool print>
-int Tiling<dist, THREADS, BLK_SM, print>::calc_shMem(){
-  if constexpr (dist == D1)
+int Tiling::calc_shMem() {
+  if (dist == D1) {
     return tile_target_mem;
     // shmem just contains rows + 1 + columns of a partition
-  else if (dist == D2) {
+  } else if (dist == D2) {
     return tile_target_mem * 2;
     // shmem similar to D1 but additionally contains space to sort hashes
     // so we need twice the amount of 
+  } else {
+    return -1;
   }
 }
 
-template <Distance dist, int THREADS, int BLK_SM, bool print>
-Tiling<dist, THREADS, BLK_SM, print>::Tiling(int* row_ptr, int m_rows) {
+Tiling::Tiling(Distance dist,
+               int BLK_SM,
+               int* row_ptr,
+               int m_rows,
+               void* kernel,
+               int max_smem_SM,
+               bool print) : dist(dist) {
   int devId, MaxShmemSizeSM;
   cudaGetDevice(&devId);
   cudaDeviceGetAttribute(&MaxShmemSizeSM, cudaDevAttrMaxSharedMemoryPerMultiprocessor, devId);
   // On Turing 64 kB Shmem hard Cap with 32kB L1.
   // There are other predefined "carveout" levels that might also be an option
   // if more L1 cache seems usefull (on Turing just 32kB).
-  // MaxShmemSizeSM /= 2;
 
-  void *kernel;
-  if constexpr (dist == D1) {
-    kernel = reinterpret_cast<void*>(coloring1Kernel<int, THREADS, BLK_SM>);
-  } else if (dist == D2) {
-    kernel = reinterpret_cast<void*>(coloring2Kernel<int, THREADS, BLK_SM>);
+  // override MaxShmemSizeSM
+  if (max_smem_SM != -1) {
+    MaxShmemSizeSM = max_smem_SM;
   }
 
   // to extract the static shared memory allocation of a kernel
@@ -109,19 +115,19 @@ Tiling<dist, THREADS, BLK_SM, print>::Tiling(int* row_ptr, int m_rows) {
   cudaFuncSetAttribute(kernel,
                       cudaFuncAttributeMaxDynamicSharedMemorySize, max_dyn_SM);
 
-  if constexpr (print) {
+  if (print) {
     std::printf("MaxShmemSizeSM: %d\n", MaxShmemSizeSM);
     std::printf("Static sharedSizeBytes Block: %ld\n", a.sharedSizeBytes);
     std::printf("Static sharedSizeBytes SM: %ld\n", a.sharedSizeBytes * BLK_SM);
     std::printf("max_dyn_SM: %d\n", max_dyn_SM);
   }
 
-  if constexpr (dist == D1) {
+  if (dist == D1) {
     tile_target_mem = max_dyn_SM/BLK_SM;
   } else if (dist == D2) {
     // we can use only half of the shmem to store the tile because we need
     // the other half to find dist2 collisions
-    tile_target_mem = (max_dyn_SM/BLK_SM)/2;
+    tile_target_mem = (max_dyn_SM / BLK_SM) / 2;
   }
   very_simple_tiling(row_ptr,
                      m_rows,
@@ -133,8 +139,6 @@ Tiling<dist, THREADS, BLK_SM, print>::Tiling(int* row_ptr, int m_rows) {
   get_MaxTileSize(n_tiles, tile_boundaries.get(), row_ptr,
                   &biggest_tile_nodes, &biggest_tile_edges, &max_nodes, &max_edges);
 }
-
-
 
 class GPUSetupD1 {
  protected:

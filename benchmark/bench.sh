@@ -5,4 +5,5 @@
 #SBATCH --ntasks-per-node=8
 
 #gpu:gtx_1080_ti:1      gpu:rtx_2080_ti:1
-../rls-build/numBlocks_bench.out --devices 0 --timeout 30
+compute-sanitizer ../rls-build/partKernels.out --devices 0 --timeout 10
+# compute-sanitizer ../rls-build/numBlocks_bench.out --devices 0 --timeout 10

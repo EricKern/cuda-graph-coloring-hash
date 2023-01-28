@@ -47,6 +47,13 @@ target_include_directories(${BenchTarget} PRIVATE "${PROJECT_SOURCE_DIR}/include
 target_link_libraries(${BenchTarget} PRIVATE tiling cpumultiply nvbench::main)
 set_target_properties(${BenchTarget} PROPERTIES COMPILE_FEATURES cuda_std_17)
 
+set(partKernelsName partKernels.out)
+add_executable(${partKernelsName} benchmark/partKernels.cu)
+target_compile_options(${partKernelsName} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
+target_include_directories(${partKernelsName} PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_link_libraries(${partKernelsName} PRIVATE tiling cpumultiply nvbench::main)
+set_target_properties(${partKernelsName} PROPERTIES COMPILE_FEATURES cuda_std_17)
+
 
 set(tiling_test tiling_test.out)
 add_executable(${tiling_test} my_tiling/tiling_test.cpp)

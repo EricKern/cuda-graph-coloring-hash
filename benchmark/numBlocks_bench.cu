@@ -13,8 +13,10 @@ void Dist1(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling<D1, THREADS, BLK_SM> tiling(mat_loader.row_ptr,
-                                     mat_loader.m_rows);
+  Tiling tiling(D1, BLK_SM,
+                mat_loader.row_ptr,
+                mat_loader.m_rows,
+                (void*)coloring1Kernel<int, THREADS, BLK_SM>);
   GPUSetupD1 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
                        tiling.tile_boundaries.get(),
@@ -42,8 +44,10 @@ void Dist2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling<D2, THREADS, BLK_SM> tiling(mat_loader.row_ptr,
-                                           mat_loader.m_rows);
+  Tiling tiling(D2, BLK_SM,
+                mat_loader.row_ptr,
+                mat_loader.m_rows,
+                (void*)coloring2Kernel<int, THREADS, BLK_SM>);
   GPUSetupD2 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
                        tiling.tile_boundaries.get(),
@@ -71,7 +75,7 @@ void Dist2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>
   });
 }
 
-using MyEnumList = nvbench::enum_type_list<1, 2, 4>;
+using MyEnumList = nvbench::enum_type_list<1, 2, 4, 8>;
 
 NVBENCH_BENCH_TYPES(Dist1, NVBENCH_TYPE_AXES(MyEnumList)).set_type_axes_names({"BLK_SM"});
 NVBENCH_BENCH_TYPES(Dist2, NVBENCH_TYPE_AXES(MyEnumList)).set_type_axes_names({"BLK_SM"});
