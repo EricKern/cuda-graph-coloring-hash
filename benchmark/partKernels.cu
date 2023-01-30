@@ -133,37 +133,6 @@ void D1FirstRed(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK
 }
 
 template <int BLK_SM>
-void D1FirstRed2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
-  constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
-  auto kernel = coloring1First2T<int, THREADS, BLK_SM>;
-
-  MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D1, BLK_SM,
-              mat_loader.row_ptr,
-              mat_loader.m_rows,
-              reinterpret_cast<void*>(kernel));
-  GPUSetupD1 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
-
-  size_t shMem_bytes = tiling.calc_shMem();
-  dim3 gridSize(tiling.n_tiles);
-  dim3 blockSize(THREADS);
-
-  state.exec([&](nvbench::launch& launch) {
-    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-        gpu_setup.d_row_ptr,
-        gpu_setup.d_col_ptr,
-        gpu_setup.d_tile_boundaries,
-        gpu_setup.d_soa_total1,
-        gpu_setup.d_soa_max1,
-        gpu_setup.d_total1,
-        gpu_setup.d_max1);
-  });
-}
-
-template <int BLK_SM>
 void D1Normal(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
   auto kernel = coloring1Kernel<int, THREADS, BLK_SM>;
@@ -437,7 +406,6 @@ void D2Normal(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_S
             gpu_setup.d_row_ptr,
             gpu_setup.d_col_ptr,
             gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
             gpu_setup.d_soa_total1,
             gpu_setup.d_soa_max1,
             gpu_setup.d_soa_total2,

@@ -926,6 +926,18 @@ void get_MaxTileSize(const int number_of_tiles,
 
 }
 
+inline
+int roundUp(int numToRound, int multiple) {
+    if (multiple == 0)
+        return numToRound;
+
+    int remainder = numToRound % multiple;
+    if (remainder == 0)
+        return numToRound;
+
+    return numToRound + multiple - remainder;
+}
+
 /// @brief 
 /// @param [in] row_ptr 
 /// @param [in] m_rows 
@@ -938,7 +950,8 @@ void very_simple_tiling(int* row_ptr,
                         int max_tile_size_byte,
                         std::unique_ptr<int[]>* tile_boundaries,
                         int* n_tiles,
-                        int* max_node_degree) {
+                        int* max_node_degree,
+						bool bank_conflict_free) {
   int len_row_ptr = m_rows + 1;
   std::vector<int> n_neighbors(len_row_ptr);
   auto start1 = row_ptr;
@@ -964,7 +977,13 @@ void very_simple_tiling(int* row_ptr,
   for (int i = 1; i < m_rows+1; ++i) {
     tile_rows = i - boundaries[tile_num - 1];
     tile_cols += n_neighbors[i];
-    current_size = tile_cols + tile_rows + 1;
+	if (bank_conflict_free) {	// tiling to avoid bank conflicts
+		auto single_node_mem = roundUp(*max_node_degree + 1, 32) + 1;
+		auto additional = single_node_mem * tile_rows;
+		current_size = tile_cols + tile_rows + 1 + additional;
+	} else {
+    	current_size = tile_cols + tile_rows + 1;
+	}
     if (sizeof(int) * current_size > max_tile_size_byte) {
       if (tile_rows == 1) {
         std::printf("Error:");

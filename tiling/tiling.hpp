@@ -1,3 +1,4 @@
+#pragma once
 /** 
  * \file tiling.hpp
  * @brief Header file of shared library containing tiling process functions
@@ -84,4 +85,5 @@ void very_simple_tiling(int* row_ptr,
                         int max_tile_size_byte,
                         std::unique_ptr<int[]>* tile_boundaries,
                         int* n_tiles,
-                        int* max_node_degree);
+                        int* max_node_degree,
+                        bool bank_conflict_free=false);

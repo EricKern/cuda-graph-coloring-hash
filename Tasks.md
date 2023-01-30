@@ -60,3 +60,9 @@ Shared memory für dist2 mit sorting network braucht genaue größe der partitio
 
 - preprocessing evtl mit thrust/cub wenn nicht aufwändig
 - Streaming variante erst mal später
+
+# 30.01
+- constexpression struct nicht einfach so in device code sichtbar?
+- Übergabeparameter vs gecached laden?
+- wie viele Hash funktionen
+- wieso dist2 so langsam?

@@ -16,7 +16,7 @@
 
 #include <cpu_coloring.hpp>
 
-#define DIST2 0
+#define DIST2 1
 
 void printResult(const apa22_coloring::Counters& sum,
                  const apa22_coloring::Counters& max) {
@@ -48,7 +48,8 @@ int main(int argc, char const *argv[]) {
   Tiling tiling(D2, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)coloring2Kernel<int, THREADS, BLK_SM>);
+                (void*)coloring2Kernel<int, THREADS, BLK_SM>,
+                -1, true);
   GPUSetupD2 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
                        tiling.tile_boundaries.get(),
@@ -74,6 +75,7 @@ int main(int argc, char const *argv[]) {
   std::printf("biggest_tile_edges: %d\n", tiling.biggest_tile_edges);
   std::printf("max nodes in any tile: %d\n", tiling.max_nodes);
   std::printf("max edges in any tile: %d\n", tiling.max_edges);
+  std::printf("max node degree: %d\n", tiling.max_node_degree);
   
   // calc shMem
   size_t shMem_bytes = tiling.calc_shMem();
@@ -81,11 +83,11 @@ int main(int argc, char const *argv[]) {
   dim3 blockSize(THREADS);
 
 #if DIST2
-  coloring2Kernel<int, THREADS, BLK_SM>
+  coloring2KernelBank<int, THREADS, BLK_SM>
   <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
                                          gpu_setup.d_col_ptr,
                                          gpu_setup.d_tile_boundaries,
-                                         tiling.tile_target_mem,
+                                         tiling.max_node_degree,
                                          gpu_setup.d_soa_total1,
                                          gpu_setup.d_soa_max1,
                                          gpu_setup.d_soa_total2,
@@ -94,6 +96,18 @@ int main(int argc, char const *argv[]) {
                                          gpu_setup.d_max1,
                                          gpu_setup.d_total2,
                                          gpu_setup.d_max2);
+  // coloring2Kernel<int, THREADS, BLK_SM>
+  // <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
+  //                                        gpu_setup.d_col_ptr,
+  //                                        gpu_setup.d_tile_boundaries,
+  //                                        gpu_setup.d_soa_total1,
+  //                                        gpu_setup.d_soa_max1,
+  //                                        gpu_setup.d_soa_total2,
+  //                                        gpu_setup.d_soa_max2,
+  //                                        gpu_setup.d_total1,
+  //                                        gpu_setup.d_max1,
+  //                                        gpu_setup.d_total2,
+  //                                        gpu_setup.d_max2);
 #else
   coloring1Kernel<int, THREADS, BLK_SM>
   <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,

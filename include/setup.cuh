@@ -69,6 +69,7 @@ class Tiling {
          int m_rows,
          void* kernel,
          int max_smem_SM = -1,
+         bool bank_conflict_free = false,
          bool print = false);
 };
 
@@ -91,6 +92,7 @@ Tiling::Tiling(Distance dist,
                int m_rows,
                void* kernel,
                int max_smem_SM,
+               bool bank_conflict_free,
                bool print) : dist(dist) {
   int devId, MaxShmemSizeSM;
   cudaGetDevice(&devId);
@@ -129,12 +131,23 @@ Tiling::Tiling(Distance dist,
     // the other half to find dist2 collisions
     tile_target_mem = (max_dyn_SM / BLK_SM) / 2;
   }
-  very_simple_tiling(row_ptr,
-                     m_rows,
-                     tile_target_mem,
-                     &tile_boundaries,
-                     &n_tiles,
-                     &max_node_degree);
+  
+  if(bank_conflict_free) {
+    very_simple_tiling(row_ptr,
+                      m_rows,
+                      tile_target_mem,
+                      &tile_boundaries,
+                      &n_tiles,
+                      &max_node_degree,
+                      true);
+  } else{
+    very_simple_tiling(row_ptr,
+                      m_rows,
+                      tile_target_mem,
+                      &tile_boundaries,
+                      &n_tiles,
+                      &max_node_degree);
+  }
   // post processing
   get_MaxTileSize(n_tiles, tile_boundaries.get(), row_ptr,
                   &biggest_tile_nodes, &biggest_tile_edges, &max_nodes, &max_edges);

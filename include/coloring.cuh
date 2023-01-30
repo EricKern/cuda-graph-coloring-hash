@@ -4,6 +4,7 @@
 #include <hash.cuh>
 #include <cstdint>    // for mask
 #include <coloringCounters.cuh>
+#include <odd_even_sort.hpp>
 
 #include <thrust/sort.h>
 #include <thrust/execution_policy.h>
@@ -313,7 +314,6 @@ __launch_bounds__(THREADS, BLK_SM)
 void coloring2Kernel(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     int dyn_shmem_bytes,     // n_rows + 1 + n_cols
                      SOACounters* soa_total1,
                      SOACounters* soa_max1,
                      SOACounters* soa_total2,
@@ -324,8 +324,11 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
                      Counters* d_max2) {
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
-  const int n_tileEdges = dyn_shmem_bytes/sizeof(IndexT) - (n_tileNodes+1);
 
+  IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
+  const int n_tileEdges = row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
+
+  // shared mem size: 2 * (n_rows + 1 + n_cols)
   extern __shared__ IndexT shMem[];
   IndexT* shMemRows = shMem;                        // n_tileNodes + 1 elements
   IndexT* shMemCols = &shMemRows[n_tileNodes+1];    // n_tileEdges elements
@@ -344,6 +347,212 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
                       total1, max1);
     D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
                       hash_params.val[k], total2, max2);
+    for (int i = 0; i < num_bit_widths; ++i) {
+      int l1_sum1 = BlockReduceT(temp_storage)
+                       .Reduce(total1.m[i], cub::Sum{}, n_tileNodes);
+      cg::this_thread_block().sync();
+      int l1_max1 = BlockReduceT(temp_storage)
+                       .Reduce(max1.m[i], cub::Max{}, n_tileNodes);
+      cg::this_thread_block().sync();
+      int l1_sum2 = BlockReduceT(temp_storage)
+                       .Reduce(total2.m[i], cub::Sum{}, n_tileNodes);
+      cg::this_thread_block().sync();
+      int l1_max2 = BlockReduceT(temp_storage)
+                       .Reduce(max2.m[i], cub::Max{}, n_tileNodes);
+      cg::this_thread_block().sync();
+
+      // soa has an int array for each hash function.
+      // In this array all block reduce results of first counter are stored
+      // contiguous followed by the reduce results of the next counter ...
+      if(threadIdx.x == 0){
+        soa_total1->m[k][partNr + i * gridDim.x] = l1_sum1;
+        soa_max1->m[k][partNr + i * gridDim.x] = l1_max1;
+        soa_total2->m[k][partNr + i * gridDim.x] = l1_sum2;
+        soa_max2->m[k][partNr + i * gridDim.x] = l1_max2;
+      }
+    }
+  }
+
+  __threadfence();
+
+  __shared__ bool amLast;
+  // Thread 0 takes a ticket
+  if (threadIdx.x == 0) {
+    unsigned int ticket = atomicInc(&retirementCount, gridDim.x);
+    // If the ticket ID is equal to the number of blocks, we are the last
+    // block!
+    amLast = (ticket == gridDim.x - 1);
+  }
+
+  cg::this_thread_block().sync();
+
+  // The last block reduces the results of all other blocks
+  if (amLast) {
+    D1LastReduction<BlockReduceT>(soa_total1, d_total1, cub::Sum{}, temp_storage);
+    D1LastReduction<BlockReduceT>(soa_max1, d_max1, cub::Max{}, temp_storage);
+
+    D1LastReduction<BlockReduceT>(soa_total2, d_total2, cub::Sum{}, temp_storage);
+    D1LastReduction<BlockReduceT>(soa_max2, d_max2, cub::Max{}, temp_storage);
+
+    if (threadIdx.x == 0) {
+      // reset retirement count so that next run succeeds
+      retirementCount = 0;
+    }
+  }
+
+}
+
+__device__ __forceinline__
+int roundUp(int numToRound, int multiple) {
+    if (multiple == 0)
+        return numToRound;
+
+    int remainder = numToRound % multiple;
+    if (remainder == 0)
+        return numToRound;
+
+    return numToRound + multiple - remainder;
+}
+
+template <typename IndexT>
+__forceinline__ __device__
+void D2CollisionsLocalBank(IndexT* shMemRows,
+                           IndexT* shMemCols,
+                           IndexT* shMemWorkspace,
+                           IndexT* tile_boundaries,
+                           int max_node_degree,
+                           int hash_param,
+                           Counters& total,
+                           Counters& max) {
+  Counters current_collisions;
+  // Global mem access in tile_boundaries !!!!!
+  const int part_nr = blockIdx.x;
+  const int n_tileNodes = tile_boundaries[part_nr+1] - tile_boundaries[part_nr];
+  const int mem_per_node = roundUp(max_node_degree + 1, 32) + 1;
+
+  for (int i = threadIdx.x; i < n_tileNodes; i += blockDim.x) {
+    IndexT glob_row = tile_boundaries[part_nr] + i;
+    IndexT row_begin = shMemRows[i];
+		IndexT row_end = shMemRows[i + 1];
+
+    const int thread_ws_begin = i * mem_per_node;
+    // const int thread_ws_end = i + row_end - shMemRows[0];
+    // const int thread_ws_len = thread_ws_end - thread_ws_begin;
+
+    IndexT* thread_ws = shMemWorkspace + thread_ws_begin;
+
+    thread_ws[0] = __brev(hash(glob_row, hash_param));
+    
+    int j = 1;
+    for (IndexT col_idx = row_begin; col_idx < row_end; ++col_idx) {
+      IndexT col = shMemCols[col_idx - shMemRows[0]];
+      // col_idx - shMemRows[0] transforms global col_idx to shMem index
+      if (col != glob_row) {
+        thread_ws[j] = __brev(hash(col, hash_param));
+        ++j;
+      }
+    }
+    for (int k = j; k < mem_per_node; ++k) {
+      thread_ws[k] = __brev(-2);
+    }
+
+    // thrust::sort(thrust::seq, thread_ws, thread_ws + mem_per_node);
+    // sorting network to avoid bank conflicts
+    odd_even_merge_sort(thread_ws, mem_per_node);
+
+
+    // We define node collisions at dist 2 as maximum number of equal patterns
+    // in a group - 1
+    // e.g. for bitWidth 2 we get the list {00, 01, 01, 01, 10, 11}
+    // In this case we have 3x "01" as biggest group. So collisions would be 2.
+    // We subtract 1 because if each group has 1 element the coloring would be
+    // good so there are no collisions
+
+    // Now we actually do reduce_by_key of list with all ones. With bitmask applied to
+    // sorted list as keys. Then we find max in reduced array.
+
+    # pragma unroll num_bit_widths
+    for(int counter_idx = 0; counter_idx < num_bit_widths; ++counter_idx){
+      auto shift_val = start_bit_width + counter_idx;
+
+      std::uint32_t mask = (1u << shift_val) - 1;
+      int max_so_far = 1;
+      int current = 1;
+
+      auto group_start_hash = __brev(thread_ws[0]);
+      for (auto edge_idx = 1; edge_idx < j; ++edge_idx) {
+        auto next_hash = __brev(thread_ws[edge_idx]);
+
+        if((group_start_hash & mask) == (next_hash & mask)){
+          current += 1;
+        } else {
+          group_start_hash = next_hash;
+
+          max_so_far = (current > max_so_far) ? current : max_so_far;
+          current = 1;
+        }
+      }
+      max_so_far = (current > max_so_far) ? current : max_so_far;
+      // Put max_so_far - 1 in counter for current bit width
+      current_collisions.m[counter_idx] = max_so_far - 1;
+    }
+
+    Sum_Counters sum_ftor;
+    Max_Counters max_ftor;
+    total = sum_ftor(current_collisions, total);
+    max = max_ftor(current_collisions, max);
+    current_collisions = Counters{};
+  }
+
+  // remove if shared mem is not reused. Depends if cub doesn't require that
+  // all threads have results present when calling block reduce.
+  cg::this_thread_block().sync();
+
+}
+
+template <typename IndexT,
+          int THREADS,
+          int BLK_SM,
+          cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
+__global__
+__launch_bounds__(THREADS, BLK_SM)
+void coloring2KernelBank(IndexT* row_ptr,  // global mem
+                         IndexT* col_ptr,  // global mem
+                         IndexT* tile_boundaries,
+                         int max_node_degree,
+                         SOACounters* soa_total1,
+                         SOACounters* soa_max1,
+                         SOACounters* soa_total2,
+                         SOACounters* soa_max2,
+                         Counters* d_total1,
+                         Counters* d_max1,
+                         Counters* d_total2,
+                         Counters* d_max2) {
+  const int partNr = blockIdx.x;
+  const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
+
+  IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
+  const int n_tileEdges = row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
+
+  // shared mem size: 2 * (n_rows + 1 + n_cols)
+  extern __shared__ IndexT shMem[];
+  IndexT* shMemRows = shMem;                        // n_tileNodes + 1 elements
+  IndexT* shMemCols = &shMemRows[n_tileNodes+1];    // n_tileEdges elements
+  IndexT* shMemWorkspace = &shMemCols[n_tileEdges]; // n_tileNodes + n_tileEdges + 1 elements
+  
+  Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
+  typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceT;
+
+  __shared__ typename BlockReduceT::TempStorage temp_storage;
+
+
+  for (int k = 0; k < hash_params.len; ++k) {
+    Counters total1, max1;
+    Counters total2, max2;
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+                      total1, max1);
+    D2CollisionsLocalBank(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
+                          max_node_degree, hash_params.val[k], total2, max2);
     for (int i = 0; i < num_bit_widths; ++i) {
       int l1_sum1 = BlockReduceT(temp_storage)
                        .Reduce(total1.m[i], cub::Sum{}, n_tileNodes);

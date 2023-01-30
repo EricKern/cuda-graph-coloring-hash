@@ -63,7 +63,6 @@ void Dist2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>
             gpu_setup.d_row_ptr,
             gpu_setup.d_col_ptr,
             gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
             gpu_setup.d_soa_total1,
             gpu_setup.d_soa_max1,
             gpu_setup.d_soa_total2,
