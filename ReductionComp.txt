@@ -1,0 +1,323 @@
+# Devices
+
+## [0] `NVIDIA GeForce RTX 2080 Ti`
+* SM Version: 750 (PTX Version: 750)
+* Number of SMs: 68
+* SM Default Clock Rate: 1545 MHz
+* Global Memory: 10846 MiB Free / 11019 MiB Total
+* Global Memory Bus Peak: 616 GB/sec (352-bit DDR @7000MHz)
+* Max Shared Memory: 64 KiB/SM, 48 KiB/Block
+* L2 Cache Size: 5632 KiB
+* Maximum Active Blocks: 16/SM
+* Maximum Active Threads: 1024/SM, 1024/Block
+* Available Registers: 65536/SM, 65536/Block
+* ECC Enabled: No
+
+# Log
+
+```
+Run:  [1/45] Dist1Ranking_Commutative [Device=0 BLK_SM=1]
+Pass: Cold: 8.326922ms GPU, 8.332527ms CPU, 21.58s total GPU, 21.68s total wall, 2592x 
+Pass: Batch: 8.356049ms GPU, 21.67s total GPU, 21.70s total wall, 2593x
+Run:  [2/45] Dist1Ranking_Commutative [Device=0 BLK_SM=2]
+Pass: Cold: 7.429015ms GPU, 7.434621ms CPU, 3.92s total GPU, 3.94s total wall, 528x 
+Pass: Batch: 7.442408ms GPU, 3.94s total GPU, 3.94s total wall, 529x
+Run:  [3/45] Dist1Ranking_Commutative [Device=0 BLK_SM=4]
+Pass: Cold: 7.230969ms GPU, 7.236538ms CPU, 0.51s total GPU, 0.51s total wall, 70x 
+Pass: Batch: 7.229525ms GPU, 0.52s total GPU, 0.52s total wall, 72x
+Run:  [4/45] Dist1Ranking [Device=0 BLK_SM=1]
+Pass: Cold: 8.403328ms GPU, 8.408908ms CPU, 4.44s total GPU, 4.45s total wall, 528x 
+Pass: Batch: 8.400941ms GPU, 4.44s total GPU, 4.45s total wall, 529x
+Run:  [5/45] Dist1Ranking [Device=0 BLK_SM=2]
+Pass: Cold: 7.454311ms GPU, 7.459999ms CPU, 1.19s total GPU, 1.20s total wall, 160x 
+Pass: Batch: 7.442263ms GPU, 1.20s total GPU, 1.20s total wall, 161x
+Run:  [6/45] Dist1Ranking [Device=0 BLK_SM=4]
+Pass: Cold: 7.519699ms GPU, 7.525323ms CPU, 2.75s total GPU, 2.76s total wall, 366x 
+Pass: Batch: 7.514956ms GPU, 2.76s total GPU, 2.76s total wall, 367x
+Run:  [7/45] Dist1Warp [Device=0 BLK_SM=1]
+Pass: Cold: 8.077028ms GPU, 8.082590ms CPU, 4.39s total GPU, 4.41s total wall, 544x 
+Pass: Batch: 8.072001ms GPU, 4.40s total GPU, 4.41s total wall, 545x
+Run:  [8/45] Dist1Warp [Device=0 BLK_SM=2]
+Pass: Cold: 7.060307ms GPU, 7.065921ms CPU, 4.07s total GPU, 4.09s total wall, 576x 
+Pass: Batch: 7.058444ms GPU, 4.07s total GPU, 4.08s total wall, 577x
+Run:  [9/45] Dist1Warp [Device=0 BLK_SM=4]
+Pass: Cold: 7.048037ms GPU, 7.053662ms CPU, 0.50s total GPU, 0.50s total wall, 71x 
+Pass: Batch: 7.047757ms GPU, 0.52s total GPU, 0.52s total wall, 74x
+Run:  [10/45] Dist1Ranking_Commutative2 [Device=0 BLK_SM=1]
+Pass: Cold: 8.909554ms GPU, 8.915205ms CPU, 4.70s total GPU, 4.72s total wall, 528x 
+Pass: Batch: 8.905825ms GPU, 4.71s total GPU, 4.72s total wall, 529x
+Run:  [11/45] Dist1Ranking_Commutative2 [Device=0 BLK_SM=2]
+Pass: Cold: 7.847004ms GPU, 7.852674ms CPU, 4.90s total GPU, 4.92s total wall, 624x 
+Pass: Batch: 7.856127ms GPU, 4.91s total GPU, 4.92s total wall, 625x
+Run:  [12/45] Dist1Ranking_Commutative2 [Device=0 BLK_SM=4]
+Pass: Cold: 7.680966ms GPU, 7.686437ms CPU, 0.51s total GPU, 0.51s total wall, 66x 
+Pass: Batch: 7.673442ms GPU, 0.53s total GPU, 0.53s total wall, 69x
+Run:  [13/45] Dist1Warp2 [Device=0 BLK_SM=1]
+Pass: Cold: 8.086993ms GPU, 8.092591ms CPU, 4.27s total GPU, 4.29s total wall, 528x 
+Pass: Batch: 8.084216ms GPU, 4.28s total GPU, 4.28s total wall, 529x
+Run:  [14/45] Dist1Warp2 [Device=0 BLK_SM=2]
+Pass: Cold: 7.040266ms GPU, 7.045876ms CPU, 1.01s total GPU, 1.02s total wall, 144x 
+Pass: Batch: 7.070335ms GPU, 1.03s total GPU, 1.03s total wall, 145x
+Run:  [15/45] Dist1Warp2 [Device=0 BLK_SM=4]
+Pass: Cold: 7.138445ms GPU, 7.144142ms CPU, 3.77s total GPU, 3.79s total wall, 528x 
+Pass: Batch: 7.134356ms GPU, 3.77s total GPU, 3.78s total wall, 529x
+Run:  [16/45] Dist1CustomReduceWarp [Device=0 BLK_SM=1]
+Pass: Cold: 3.091637ms GPU, 3.097243ms CPU, 0.51s total GPU, 0.52s total wall, 166x 
+Pass: Batch: 3.111996ms GPU, 0.53s total GPU, 0.53s total wall, 170x
+Run:  [17/45] Dist1CustomReduceWarp [Device=0 BLK_SM=2]
+Pass: Cold: 2.973443ms GPU, 2.979225ms CPU, 3.14s total GPU, 3.18s total wall, 1056x 
+Pass: Batch: 2.977571ms GPU, 3.15s total GPU, 3.16s total wall, 1057x
+Run:  [18/45] Dist1CustomReduceWarp [Device=0 BLK_SM=4]
+Pass: Cold: 3.423522ms GPU, 3.429210ms CPU, 1.97s total GPU, 1.99s total wall, 576x 
+Pass: Batch: 3.427169ms GPU, 1.98s total GPU, 1.98s total wall, 577x
+Run:  [19/45] Dist1CustomReduceLast [Device=0 BLK_SM=1]
+Pass: Cold: 3.189496ms GPU, 3.195206ms CPU, 3.98s total GPU, 4.02s total wall, 1248x 
+Pass: Batch: 3.194205ms GPU, 3.99s total GPU, 4.01s total wall, 1249x
+Run:  [20/45] Dist1CustomReduceLast [Device=0 BLK_SM=2]
+Pass: Cold: 3.024987ms GPU, 3.030627ms CPU, 3.78s total GPU, 3.82s total wall, 1248x 
+Pass: Batch: 3.028160ms GPU, 3.78s total GPU, 3.80s total wall, 1249x
+Run:  [21/45] Dist1CustomReduceLast [Device=0 BLK_SM=4]
+Pass: Cold: 3.449878ms GPU, 3.455592ms CPU, 2.04s total GPU, 2.06s total wall, 592x 
+Pass: Batch: 3.450447ms GPU, 2.05s total GPU, 2.05s total wall, 593x
+Run:  [22/45] Dist2Ranking_Commutative [Device=0 BLK_SM=1]
+Pass: Cold: 2011.147191ms GPU, 2011.140310ms CPU, 386.14s total GPU, 386.15s total wall, 192x 
+Pass: Batch: 2007.379621ms GPU, 387.42s total GPU, 387.43s total wall, 193x
+Run:  [23/45] Dist2Ranking_Commutative [Device=0 BLK_SM=2]
+Warn: Current measurement timed out (600.35s) while over noise threshold (1.77% > 0.50%)
+Pass: Cold: 2106.472278ms GPU, 2106.464723ms CPU, 600.34s total GPU, 600.35s total wall, 285x 
+Pass: Batch: 2110.374217ms GPU, 601.46s total GPU, 601.46s total wall, 285x
+Run:  [24/45] Dist2Ranking_Commutative [Device=0 BLK_SM=4]
+Warn: Current measurement timed out (601.70s) while over noise threshold (1.72% > 0.50%)
+Pass: Cold: 2096.480311ms GPU, 2096.472884ms CPU, 601.69s total GPU, 601.70s total wall, 287x 
+Pass: Batch: 2093.938669ms GPU, 600.96s total GPU, 600.96s total wall, 287x
+Run:  [25/45] Dist2Ranking_Commutative2 [Device=0 BLK_SM=1]
+Warn: Current measurement timed out (600.43s) while over noise threshold (1.28% > 0.50%)
+Pass: Cold: 1949.410603ms GPU, 1949.404011ms CPU, 600.42s total GPU, 600.43s total wall, 308x 
+Pass: Batch: 1952.175831ms GPU, 601.27s total GPU, 601.27s total wall, 308x
+Run:  [26/45] Dist2Ranking_Commutative2 [Device=0 BLK_SM=2]
+Pass: Cold: 2032.363219ms GPU, 2032.356165ms CPU, 162.59s total GPU, 162.59s total wall, 80x 
+Pass: Batch: 2037.628335ms GPU, 165.05s total GPU, 165.05s total wall, 81x
+Run:  [27/45] Dist2Ranking_Commutative2 [Device=0 BLK_SM=4]
+Warn: Current measurement timed out (600.96s) while over noise threshold (1.65% > 0.50%)
+Pass: Cold: 2009.871124ms GPU, 2009.864011ms CPU, 600.95s total GPU, 600.96s total wall, 299x 
+Pass: Batch: 2011.077632ms GPU, 601.31s total GPU, 601.31s total wall, 299x
+Run:  [28/45] Dist2Ranking_Commutative4 [Device=0 BLK_SM=1]
+Warn: Current measurement timed out (601.32s) while over noise threshold (0.99% > 0.50%)
+Pass: Cold: 1939.721606ms GPU, 1939.714976ms CPU, 601.31s total GPU, 601.32s total wall, 310x 
+Pass: Batch: 1938.514623ms GPU, 600.94s total GPU, 600.94s total wall, 310x
+Run:  [29/45] Dist2Ranking_Commutative4 [Device=0 BLK_SM=2]
+Pass: Cold: 1937.388293ms GPU, 1937.381655ms CPU, 154.99s total GPU, 154.99s total wall, 80x 
+Pass: Batch: 1937.040674ms GPU, 156.90s total GPU, 156.90s total wall, 81x
+Run:  [30/45] Dist2Ranking_Commutative4 [Device=0 BLK_SM=4]
+Warn: Current measurement timed out (601.46s) while over noise threshold (1.44% > 0.50%)
+Pass: Cold: 1959.144263ms GPU, 1959.137542ms CPU, 601.46s total GPU, 601.46s total wall, 307x 
+Pass: Batch: 1956.173987ms GPU, 600.55s total GPU, 600.55s total wall, 307x
+Run:  [31/45] Dist2Warp [Device=0 BLK_SM=1]
+Warn: Current measurement timed out (601.39s) while over noise threshold (1.31% > 0.50%)
+Pass: Cold: 2052.485337ms GPU, 2052.477684ms CPU, 601.38s total GPU, 601.39s total wall, 293x 
+Pass: Batch: 2053.054388ms GPU, 601.54s total GPU, 601.55s total wall, 293x
+Run:  [32/45] Dist2Warp [Device=0 BLK_SM=2]
+Warn: Current measurement timed out (601.47s) while over noise threshold (1.76% > 0.50%)
+Pass: Cold: 2117.824423ms GPU, 2117.816336ms CPU, 601.46s total GPU, 601.47s total wall, 284x 
+Pass: Batch: 2114.947252ms GPU, 600.65s total GPU, 600.65s total wall, 284x
+Run:  [33/45] Dist2Warp [Device=0 BLK_SM=4]
+Pass: Cold: 2117.030969ms GPU, 2117.022964ms CPU, 169.36s total GPU, 169.36s total wall, 80x 
+Pass: Batch: 2110.293094ms GPU, 170.93s total GPU, 170.93s total wall, 81x
+Run:  [34/45] Dist2Warp2 [Device=0 BLK_SM=1]
+Warn: Current measurement timed out (601.29s) while over noise threshold (1.40% > 0.50%)
+Pass: Cold: 2052.160140ms GPU, 2052.152589ms CPU, 601.28s total GPU, 601.29s total wall, 293x 
+Pass: Batch: 2052.111245ms GPU, 601.27s total GPU, 601.27s total wall, 293x
+Run:  [35/45] Dist2Warp2 [Device=0 BLK_SM=2]
+Warn: Current measurement timed out (600.13s) while over noise threshold (1.92% > 0.50%)
+Pass: Cold: 2113.095517ms GPU, 2113.087682ms CPU, 600.12s total GPU, 600.13s total wall, 284x 
+Pass: Batch: 2115.694549ms GPU, 600.86s total GPU, 600.86s total wall, 284x
+Run:  [36/45] Dist2Warp2 [Device=0 BLK_SM=4]
+Warn: Current measurement timed out (600.88s) while over noise threshold (1.63% > 0.50%)
+Pass: Cold: 2115.756726ms GPU, 2115.748978ms CPU, 600.87s total GPU, 600.88s total wall, 284x 
+Pass: Batch: 2117.420103ms GPU, 601.35s total GPU, 601.35s total wall, 284x
+Run:  [37/45] Dist2Warp4 [Device=0 BLK_SM=1]
+Warn: Current measurement timed out (601.07s) while over noise threshold (1.35% > 0.50%)
+Pass: Cold: 2051.408198ms GPU, 2051.400655ms CPU, 601.06s total GPU, 601.07s total wall, 293x 
+Pass: Batch: 2050.519167ms GPU, 600.80s total GPU, 600.80s total wall, 293x
+Run:  [38/45] Dist2Warp4 [Device=0 BLK_SM=2]
+Pass: Cold: 2110.060253ms GPU, 2110.052412ms CPU, 303.85s total GPU, 303.85s total wall, 144x 
+Pass: Batch: 2111.106915ms GPU, 306.11s total GPU, 306.11s total wall, 145x
+Run:  [39/45] Dist2Warp4 [Device=0 BLK_SM=4]
+Pass: Cold: 2115.161143ms GPU, 2115.153371ms CPU, 439.95s total GPU, 439.96s total wall, 208x 
+Pass: Batch: 2114.830066ms GPU, 442.00s total GPU, 442.00s total wall, 209x
+Run:  [40/45] Dist2CustomReduce [Device=0 BLK_SM=1]
+Pass: Cold: 2039.508608ms GPU, 2039.501123ms CPU, 587.38s total GPU, 587.39s total wall, 288x 
+Pass: Batch: 2039.039345ms GPU, 589.28s total GPU, 589.28s total wall, 289x
+Run:  [41/45] Dist2CustomReduce [Device=0 BLK_SM=2]
+Pass: Cold: 2106.113283ms GPU, 2106.105492ms CPU, 235.88s total GPU, 235.89s total wall, 112x 
+Pass: Batch: 2098.992330ms GPU, 237.19s total GPU, 237.19s total wall, 113x
+Run:  [42/45] Dist2CustomReduce [Device=0 BLK_SM=4]
+Warn: Current measurement timed out (601.11s) while over noise threshold (1.59% > 0.50%)
+Pass: Cold: 2116.576719ms GPU, 2116.568809ms CPU, 601.11s total GPU, 601.11s total wall, 284x 
+Warn: Current measurement timed out (600.40s) before accumulating min_samples (283 < 284)
+Pass: Batch: 2121.555318ms GPU, 600.40s total GPU, 600.40s total wall, 283x
+Run:  [43/45] Dist2CustomReduceLast [Device=0 BLK_SM=1]
+Warn: Current measurement timed out (600.61s) while over noise threshold (1.29% > 0.50%)
+Pass: Cold: 2035.941974ms GPU, 2035.934564ms CPU, 600.60s total GPU, 600.61s total wall, 295x 
+Pass: Batch: 2038.504669ms GPU, 601.36s total GPU, 601.36s total wall, 295x
+Run:  [44/45] Dist2CustomReduceLast [Device=0 BLK_SM=2]
+Warn: Current measurement timed out (600.46s) while over noise threshold (1.70% > 0.50%)
+Pass: Cold: 2106.862062ms GPU, 2106.854252ms CPU, 600.46s total GPU, 600.46s total wall, 285x 
+Pass: Batch: 2104.811165ms GPU, 601.98s total GPU, 601.98s total wall, 286x
+Run:  [45/45] Dist2CustomReduceLast [Device=0 BLK_SM=4]
+Warn: Current measurement timed out (601.21s) while over noise threshold (1.75% > 0.50%)
+Pass: Cold: 2116.923388ms GPU, 2116.915549ms CPU, 601.21s total GPU, 601.21s total wall, 284x 
+Pass: Batch: 2116.257604ms GPU, 601.02s total GPU, 601.02s total wall, 284x
+```
+
+# Benchmark Results
+
+## Dist1Ranking_Commutative
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |   2592x | 8.333 ms | 1.61% | 8.327 ms | 1.61% |   2593x |  8.356 ms |
+|      2 |    528x | 7.435 ms | 0.83% | 7.429 ms | 0.83% |    529x |  7.442 ms |
+|      4 |     70x | 7.237 ms | 0.42% | 7.231 ms | 0.41% |     72x |  7.230 ms |
+
+## Dist1Ranking
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |    528x | 8.409 ms | 0.77% | 8.403 ms | 0.77% |    529x |  8.401 ms |
+|      2 |    160x | 7.460 ms | 0.88% | 7.454 ms | 0.87% |    161x |  7.442 ms |
+|      4 |    366x | 7.525 ms | 0.51% | 7.520 ms | 0.50% |    367x |  7.515 ms |
+
+## Dist1Warp
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |    544x | 8.083 ms | 0.70% | 8.077 ms | 0.69% |    545x |  8.072 ms |
+|      2 |    576x | 7.066 ms | 0.86% | 7.060 ms | 0.86% |    577x |  7.058 ms |
+|      4 |     71x | 7.054 ms | 0.42% | 7.048 ms | 0.41% |     74x |  7.048 ms |
+
+## Dist1Ranking_Commutative2
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |    528x | 8.915 ms | 0.73% | 8.910 ms | 0.73% |    529x |  8.906 ms |
+|      2 |    624x | 7.853 ms | 0.89% | 7.847 ms | 0.88% |    625x |  7.856 ms |
+|      4 |     66x | 7.686 ms | 0.44% | 7.681 ms | 0.43% |     69x |  7.673 ms |
+
+## Dist1Warp2
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |    528x | 8.093 ms | 0.66% | 8.087 ms | 0.65% |    529x |  8.084 ms |
+|      2 |    144x | 7.046 ms | 0.83% | 7.040 ms | 0.83% |    145x |  7.070 ms |
+|      4 |    528x | 7.144 ms | 0.60% | 7.138 ms | 0.59% |    529x |  7.134 ms |
+
+## Dist1CustomReduceWarp
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |    166x | 3.097 ms | 0.53% | 3.092 ms | 0.50% |    170x |  3.112 ms |
+|      2 |   1056x | 2.979 ms | 0.68% | 2.973 ms | 0.65% |   1057x |  2.978 ms |
+|      4 |    576x | 3.429 ms | 0.72% | 3.424 ms | 0.70% |    577x |  3.427 ms |
+
+## Dist1CustomReduceLast
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |   1248x | 3.195 ms | 0.75% | 3.189 ms | 0.73% |   1249x |  3.194 ms |
+|      2 |   1248x | 3.031 ms | 0.64% | 3.025 ms | 0.61% |   1249x |  3.028 ms |
+|      4 |    592x | 3.456 ms | 0.76% | 3.450 ms | 0.74% |    593x |  3.450 ms |
+
+## Dist2Ranking_Commutative
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |    192x |  2.011 s | 1.25% |  2.011 s | 1.25% |    193x |   2.007 s |
+|      2 |    285x |  2.106 s | 1.77% |  2.106 s | 1.77% |    285x |   2.110 s |
+|      4 |    287x |  2.096 s | 1.72% |  2.096 s | 1.72% |    287x |   2.094 s |
+
+## Dist2Ranking_Commutative2
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |    308x |  1.949 s | 1.28% |  1.949 s | 1.28% |    308x |   1.952 s |
+|      2 |     80x |  2.032 s | 1.71% |  2.032 s | 1.71% |     81x |   2.038 s |
+|      4 |    299x |  2.010 s | 1.65% |  2.010 s | 1.65% |    299x |   2.011 s |
+
+## Dist2Ranking_Commutative4
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |    310x |  1.940 s | 0.99% |  1.940 s | 0.99% |    310x |   1.939 s |
+|      2 |     80x |  1.937 s | 1.42% |  1.937 s | 1.42% |     81x |   1.937 s |
+|      4 |    307x |  1.959 s | 1.44% |  1.959 s | 1.44% |    307x |   1.956 s |
+
+## Dist2Warp
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |    293x |  2.052 s | 1.31% |  2.052 s | 1.31% |    293x |   2.053 s |
+|      2 |    284x |  2.118 s | 1.76% |  2.118 s | 1.76% |    284x |   2.115 s |
+|      4 |     80x |  2.117 s | 1.65% |  2.117 s | 1.65% |     81x |   2.110 s |
+
+## Dist2Warp2
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |    293x |  2.052 s | 1.40% |  2.052 s | 1.40% |    293x |   2.052 s |
+|      2 |    284x |  2.113 s | 1.92% |  2.113 s | 1.92% |    284x |   2.116 s |
+|      4 |    284x |  2.116 s | 1.63% |  2.116 s | 1.63% |    284x |   2.117 s |
+
+## Dist2Warp4
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |    293x |  2.051 s | 1.35% |  2.051 s | 1.35% |    293x |   2.051 s |
+|      2 |    144x |  2.110 s | 1.74% |  2.110 s | 1.74% |    145x |   2.111 s |
+|      4 |    208x |  2.115 s | 1.69% |  2.115 s | 1.69% |    209x |   2.115 s |
+
+## Dist2CustomReduce
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |    288x |  2.040 s | 1.31% |  2.040 s | 1.31% |    289x |   2.039 s |
+|      2 |    112x |  2.106 s | 1.52% |  2.106 s | 1.52% |    113x |   2.099 s |
+|      4 |    284x |  2.117 s | 1.59% |  2.117 s | 1.59% |    283x |   2.122 s |
+
+## Dist2CustomReduceLast
+
+### [0] NVIDIA GeForce RTX 2080 Ti
+
+| BLK_SM | Samples | CPU Time | Noise | GPU Time | Noise | Samples | Batch GPU |
+|--------|---------|----------|-------|----------|-------|---------|-----------|
+|      1 |    295x |  2.036 s | 1.29% |  2.036 s | 1.29% |    295x |   2.039 s |
+|      2 |    285x |  2.107 s | 1.70% |  2.107 s | 1.70% |    286x |   2.105 s |
+|      4 |    284x |  2.117 s | 1.75% |  2.117 s | 1.75% |    284x |   2.116 s |
