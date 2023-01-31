@@ -23,7 +23,7 @@ void D1OnlyLoad(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -54,7 +54,7 @@ void D1OnlyHash(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -85,7 +85,7 @@ void D1HashWrite(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BL
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -116,7 +116,7 @@ void D1FirstRed(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -147,7 +147,7 @@ void D1Normal(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_S
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -178,7 +178,7 @@ void D2OnlyLoad(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -187,7 +187,6 @@ void D2OnlyLoad(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK
             gpu_setup.d_row_ptr,
             gpu_setup.d_col_ptr,
             gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
             gpu_setup.d_soa_total1,
             gpu_setup.d_soa_max1,
             gpu_setup.d_soa_total2,
@@ -214,7 +213,7 @@ void D2OnlyHashD1(nvbench::state &state, nvbench::type_list<nvbench::enum_type<B
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -223,7 +222,6 @@ void D2OnlyHashD1(nvbench::state &state, nvbench::type_list<nvbench::enum_type<B
             gpu_setup.d_row_ptr,
             gpu_setup.d_col_ptr,
             gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
             gpu_setup.d_soa_total1,
             gpu_setup.d_soa_max1,
             gpu_setup.d_soa_total2,
@@ -251,7 +249,7 @@ void D2OnlyHashD2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<B
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -260,7 +258,6 @@ void D2OnlyHashD2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<B
             gpu_setup.d_row_ptr,
             gpu_setup.d_col_ptr,
             gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
             gpu_setup.d_soa_total1,
             gpu_setup.d_soa_max1,
             gpu_setup.d_soa_total2,
@@ -288,7 +285,7 @@ void D2OnlyHash(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -297,7 +294,6 @@ void D2OnlyHash(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK
             gpu_setup.d_row_ptr,
             gpu_setup.d_col_ptr,
             gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
             gpu_setup.d_soa_total1,
             gpu_setup.d_soa_max1,
             gpu_setup.d_soa_total2,
@@ -325,7 +321,7 @@ void D2HashWrite(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BL
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -334,7 +330,6 @@ void D2HashWrite(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BL
             gpu_setup.d_row_ptr,
             gpu_setup.d_col_ptr,
             gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
             gpu_setup.d_soa_total1,
             gpu_setup.d_soa_max1,
             gpu_setup.d_soa_total2,
@@ -361,7 +356,7 @@ void D2FirstRed(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -370,7 +365,6 @@ void D2FirstRed(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK
             gpu_setup.d_row_ptr,
             gpu_setup.d_col_ptr,
             gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
             gpu_setup.d_soa_total1,
             gpu_setup.d_soa_max1,
             gpu_setup.d_soa_total2,
@@ -397,7 +391,7 @@ void D2Normal(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_S
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 

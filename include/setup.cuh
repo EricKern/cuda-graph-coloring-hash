@@ -11,7 +11,8 @@ namespace apa22_coloring {
 
 enum Distance {
     D1,
-    D2
+    D2,
+    D2_SortNet
 };
 
 // Singleton class so we load matrix only once
@@ -53,7 +54,7 @@ class Tiling {
   Distance dist;
   std::unique_ptr<int[]> tile_boundaries; // array with indices of each tile in all slices
   int n_tiles;
-  int tile_target_mem;  // bytes
+  int tile_target_mem;  // returns how much shmem must be dynamically allocated (in bytes)
 
   // postprocessing
   int max_node_degree;
@@ -62,29 +63,15 @@ class Tiling {
   int biggest_tile_nodes;     // maximum in the biggest node
   int biggest_tile_edges;     // maximum in the biggest node
 
-  int calc_shMem(); // returns how much shmem must be dynamically allocated (in bytes)
   Tiling(Distance dist,
          int BLK_SM,
          int* row_ptr,
          int m_rows,
          void* kernel,
-         int max_smem_SM = -1,
+         int max_smem_SM = -1,        // If not all ShMem shall be used
          bool bank_conflict_free = false,
          bool print = false);
 };
-
-int Tiling::calc_shMem() {
-  if (dist == D1) {
-    return tile_target_mem;
-    // shmem just contains rows + 1 + columns of a partition
-  } else if (dist == D2) {
-    return tile_target_mem * 2;
-    // shmem similar to D1 but additionally contains space to sort hashes
-    // so we need twice the amount of 
-  } else {
-    return -1;
-  }
-}
 
 Tiling::Tiling(Distance dist,
                int BLK_SM,
@@ -124,15 +111,26 @@ Tiling::Tiling(Distance dist,
     std::printf("max_dyn_SM: %d\n", max_dyn_SM);
   }
 
+  tile_target_mem = max_dyn_SM/BLK_SM;
   if (dist == D1) {
-    tile_target_mem = max_dyn_SM/BLK_SM;
+    very_simple_tiling(row_ptr,
+                      m_rows,
+                      tile_target_mem,
+                      &tile_boundaries,
+                      &n_tiles,
+                      &max_node_degree);
   } else if (dist == D2) {
     // we can use only half of the shmem to store the tile because we need
     // the other half to find dist2 collisions
-    tile_target_mem = (max_dyn_SM / BLK_SM) / 2;
-  }
-  
-  if(bank_conflict_free) {
+    very_simple_tiling(row_ptr,
+                      m_rows,
+                      tile_target_mem/2,
+                      &tile_boundaries,
+                      &n_tiles,
+                      &max_node_degree);
+  } else if (dist == D2_SortNet) {
+    // we can use only half of the shmem to store the tile because we need
+    // the other half to find dist2 collisions and since the 
     very_simple_tiling(row_ptr,
                       m_rows,
                       tile_target_mem,
@@ -140,13 +138,8 @@ Tiling::Tiling(Distance dist,
                       &n_tiles,
                       &max_node_degree,
                       true);
-  } else{
-    very_simple_tiling(row_ptr,
-                      m_rows,
-                      tile_target_mem,
-                      &tile_boundaries,
-                      &n_tiles,
-                      &max_node_degree);
+  } else {
+    std::printf("Please pass a valid enum Distance");
   }
   // post processing
   get_MaxTileSize(n_tiles, tile_boundaries.get(), row_ptr,

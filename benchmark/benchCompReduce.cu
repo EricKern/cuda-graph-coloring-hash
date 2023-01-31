@@ -25,7 +25,7 @@ void Dist1Ranking_Commutative(nvbench::state &state, nvbench::type_list<nvbench:
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -56,7 +56,7 @@ void Dist1Ranking(nvbench::state &state, nvbench::type_list<nvbench::enum_type<B
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -87,7 +87,7 @@ void Dist1Warp(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -118,7 +118,7 @@ void Dist1Ranking_Commutative2(nvbench::state &state, nvbench::type_list<nvbench
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -150,7 +150,7 @@ void Dist1Warp2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -181,7 +181,7 @@ void Dist1CustomReduceWarp(nvbench::state &state, nvbench::type_list<nvbench::en
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -212,7 +212,7 @@ void Dist1CustomReduceLast(nvbench::state &state, nvbench::type_list<nvbench::en
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -243,7 +243,7 @@ void Dist2Ranking_Commutative(nvbench::state &state, nvbench::type_list<nvbench:
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -278,7 +278,7 @@ void Dist2Warp(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -314,7 +314,7 @@ void Dist2Ranking_Commutative2(nvbench::state &state, nvbench::type_list<nvbench
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -350,7 +350,7 @@ void Dist2Ranking_Commutative4(nvbench::state &state, nvbench::type_list<nvbench
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -386,7 +386,7 @@ void Dist2Warp2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -422,7 +422,7 @@ void Dist2Warp4(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -458,7 +458,7 @@ void Dist2CustomReduce(nvbench::state &state, nvbench::type_list<nvbench::enum_t
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -494,7 +494,7 @@ void Dist2CustomReduceLast(nvbench::state &state, nvbench::type_list<nvbench::en
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 

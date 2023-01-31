@@ -45,10 +45,10 @@ int main(int argc, char const *argv[]) {
 
   #if DIST2
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D2, BLK_SM,
+  Tiling tiling(D2_SortNet, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)coloring2Kernel<int, THREADS, BLK_SM>,
+                (void*)coloring2KernelBank<int, THREADS, BLK_SM>,
                 -1, true);
   GPUSetupD2 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
@@ -69,7 +69,7 @@ int main(int argc, char const *argv[]) {
   std::printf("M-row %d\n", mat_loader.m_rows);
   std::printf("Nr_tiles: %d\n", tiling.n_tiles);
   std::printf("Shmem target tiling mem: %d\n", tiling.tile_target_mem);
-  std::printf("Actual Dyn shMem: %d\n", tiling.calc_shMem());
+  std::printf("Actual Dyn shMem: %d\n", tiling.tile_target_mem);
 
   std::printf("biggest_tile_nodes: %d\n", tiling.biggest_tile_nodes);
   std::printf("biggest_tile_edges: %d\n", tiling.biggest_tile_edges);
@@ -78,7 +78,7 @@ int main(int argc, char const *argv[]) {
   std::printf("max node degree: %d\n", tiling.max_node_degree);
   
   // calc shMem
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 

@@ -22,7 +22,7 @@ void Dist1(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
@@ -53,7 +53,7 @@ void Dist2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
 
-  size_t shMem_bytes = tiling.calc_shMem();
+  size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 

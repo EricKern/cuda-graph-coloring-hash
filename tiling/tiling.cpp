@@ -952,6 +952,8 @@ void very_simple_tiling(int* row_ptr,
                         int* n_tiles,
                         int* max_node_degree,
 						bool bank_conflict_free) {
+  // Instead of passing the bool switch it would be much nicer if we could pass
+  // the rule how to calculate the current size of a tile. But for now it's ok.
   int len_row_ptr = m_rows + 1;
   std::vector<int> n_neighbors(len_row_ptr);
   auto start1 = row_ptr;

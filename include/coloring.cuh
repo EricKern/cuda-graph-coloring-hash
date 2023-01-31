@@ -216,11 +216,12 @@ void coloring1Kernel(IndexT* row_ptr,
 }
 
 
-template <typename IndexT>
+template <typename IndexT,
+          typename WorkspaceT>  // same as hash output
 __forceinline__ __device__
 void D2CollisionsLocal(IndexT* shMemRows,
                        IndexT* shMemCols,
-                       IndexT* shMemWorkspace,
+                       WorkspaceT* shMemWorkspace,
                        IndexT* tile_boundaries,
                        int hash_param,
                        Counters& total,
@@ -239,7 +240,7 @@ void D2CollisionsLocal(IndexT* shMemRows,
     // const int thread_ws_end = i + row_end - shMemRows[0];
     // const int thread_ws_len = thread_ws_end - thread_ws_begin;
 
-    IndexT* thread_ws = shMemWorkspace + thread_ws_begin;
+    WorkspaceT* thread_ws = shMemWorkspace + thread_ws_begin;
 
     thread_ws[0] = __brev(hash(glob_row, hash_param));
     
@@ -322,23 +323,28 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
                      Counters* d_max1,
                      Counters* d_total2,
                      Counters* d_max2) {
+  using HashT = std::uint32_t;  //
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
   IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
-  const int n_tileEdges = row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
+  const int n_tileEdges =
+      row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
 
   // shared mem size: 2 * (n_rows + 1 + n_cols)
   extern __shared__ IndexT shMem[];
   IndexT* shMemRows = shMem;                        // n_tileNodes + 1 elements
   IndexT* shMemCols = &shMemRows[n_tileNodes+1];    // n_tileEdges elements
-  IndexT* shMemWorkspace = &shMemCols[n_tileEdges]; // n_tileNodes + n_tileEdges + 1 elements
+
+  HashT* shMemWorkspace = reinterpret_cast<HashT*>(&shMemCols[n_tileEdges]);
+  // n_tileNodes + n_tileEdges + 1 elements
+  // Since shMemCols is 32 or 64 bit, allignment for HashT which is smaller
+  // is fine.
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
+
   typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceT;
-
   __shared__ typename BlockReduceT::TempStorage temp_storage;
-
 
   for (int k = 0; k < hash_params.len; ++k) {
     Counters total1, max1;
@@ -414,11 +420,12 @@ int roundUp(int numToRound, int multiple) {
     return numToRound + multiple - remainder;
 }
 
-template <typename IndexT>
+template <typename IndexT,
+          typename WorkspaceT>
 __forceinline__ __device__
 void D2CollisionsLocalBank(IndexT* shMemRows,
                            IndexT* shMemCols,
-                           IndexT* shMemWorkspace,
+                           WorkspaceT* shMemWorkspace,
                            IndexT* tile_boundaries,
                            int max_node_degree,
                            int hash_param,
@@ -439,7 +446,7 @@ void D2CollisionsLocalBank(IndexT* shMemRows,
     // const int thread_ws_end = i + row_end - shMemRows[0];
     // const int thread_ws_len = thread_ws_end - thread_ws_begin;
 
-    IndexT* thread_ws = shMemWorkspace + thread_ws_begin;
+    WorkspaceT* thread_ws = shMemWorkspace + thread_ws_begin;
 
     thread_ws[0] = __brev(hash(glob_row, hash_param));
     
@@ -453,7 +460,9 @@ void D2CollisionsLocalBank(IndexT* shMemRows,
       }
     }
     for (int k = j; k < mem_per_node; ++k) {
-      thread_ws[k] = __brev(-2);
+      thread_ws[k] = cub::Traits<WorkspaceT>::MAX_KEY;
+      // Max value of uint32 so that padding elements are at the very end of 
+      // the sorted bitreversed array
     }
 
     // thrust::sort(thrust::seq, thread_ws, thread_ws + mem_per_node);
@@ -475,7 +484,7 @@ void D2CollisionsLocalBank(IndexT* shMemRows,
     for(int counter_idx = 0; counter_idx < num_bit_widths; ++counter_idx){
       auto shift_val = start_bit_width + counter_idx;
 
-      std::uint32_t mask = (1u << shift_val) - 1;
+      uint32_t mask = (1u << shift_val) - 1;
       int max_so_far = 1;
       int current = 1;
 
@@ -528,6 +537,7 @@ void coloring2KernelBank(IndexT* row_ptr,  // global mem
                          Counters* d_max1,
                          Counters* d_total2,
                          Counters* d_max2) {
+  using HashT = std::uint32_t;
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
@@ -538,7 +548,9 @@ void coloring2KernelBank(IndexT* row_ptr,  // global mem
   extern __shared__ IndexT shMem[];
   IndexT* shMemRows = shMem;                        // n_tileNodes + 1 elements
   IndexT* shMemCols = &shMemRows[n_tileNodes+1];    // n_tileEdges elements
-  IndexT* shMemWorkspace = &shMemCols[n_tileEdges]; // n_tileNodes + n_tileEdges + 1 elements
+  HashT* shMemWorkspace = reinterpret_cast<HashT*>(&shMemCols[n_tileEdges]);
+  // Since shMemCols is 32 or 64 bit, allignment for HashT which is smaller
+  // is fine. Tiling guarantees that shMemWorkspace is enough
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
   typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceT;

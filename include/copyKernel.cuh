@@ -83,8 +83,7 @@ void copyKernelDist2(IndexT* row_ptr,  // global mem
                      Counters* d_max2) {
     extern __shared__ IndexT shMem[];
     IndexT* shMemRows = shMem;                        
-    IndexT* shMemCols = &shMemRows[tile_max_nodes+1]; 
-    IndexT* shMemWorkspace = &shMemCols[tile_max_edges]; 
+    IndexT* shMemCols = &shMemRows[tile_max_nodes+1];
   
     Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
 

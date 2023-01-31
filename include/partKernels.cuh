@@ -173,7 +173,6 @@ __launch_bounds__(THREADS, BLK_SM)
 void coloring2OnlyLoad(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     int dyn_shmem_bytes,
                      SOACounters* soa_total1,
                      SOACounters* soa_max1,
                      SOACounters* soa_total2,
@@ -182,15 +181,18 @@ void coloring2OnlyLoad(IndexT* row_ptr,  // global mem
                      Counters* d_max1,
                      Counters* d_total2,
                      Counters* d_max2) {
-
+  using HashT = std::uint32_t;
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
-  const int n_tileEdges = dyn_shmem_bytes/sizeof(IndexT) - (n_tileNodes+1);
+
+  IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
+  const int n_tileEdges =
+      row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
 
   extern __shared__ IndexT shMem[];
   IndexT* shMemRows = shMem;                        // n_tileNodes + 1 elements
   IndexT* shMemCols = &shMemRows[n_tileNodes+1];    // n_tileEdges elements
-  IndexT* shMemWorkspace = &shMemCols[n_tileEdges]; // n_tileNodes + n_tileEdges + 1 elements
+  HashT* shMemWorkspace = reinterpret_cast<HashT*>(&shMemCols[n_tileEdges]);
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
 }
@@ -205,7 +207,6 @@ __launch_bounds__(THREADS, BLK_SM)
 void coloring2OnlyHashD1(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     int dyn_shmem_bytes,     // n_rows + 1 + n_cols
                      SOACounters* soa_total1,
                      SOACounters* soa_max1,
                      SOACounters* soa_total2,
@@ -214,14 +215,19 @@ void coloring2OnlyHashD1(IndexT* row_ptr,  // global mem
                      Counters* d_max1,
                      Counters* d_total2,
                      Counters* d_max2) {
+  using HashT = std::uint32_t;
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
-  const int n_tileEdges = dyn_shmem_bytes/sizeof(IndexT) - (n_tileNodes+1);
+
+  IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
+  const int n_tileEdges =
+      row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
+
 
   extern __shared__ IndexT shMem[];
   IndexT* shMemRows = shMem;                        // n_tileNodes + 1 elements
   IndexT* shMemCols = &shMemRows[n_tileNodes+1];    // n_tileEdges elements
-  IndexT* shMemWorkspace = &shMemCols[n_tileEdges]; // n_tileNodes + n_tileEdges + 1 elements
+  HashT* shMemWorkspace = reinterpret_cast<HashT*>(&shMemCols[n_tileEdges]);
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
 
@@ -242,7 +248,6 @@ __launch_bounds__(THREADS, BLK_SM)
 void coloring2OnlyHashD2(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     int dyn_shmem_bytes,     // n_rows + 1 + n_cols
                      SOACounters* soa_total1,
                      SOACounters* soa_max1,
                      SOACounters* soa_total2,
@@ -251,14 +256,18 @@ void coloring2OnlyHashD2(IndexT* row_ptr,  // global mem
                      Counters* d_max1,
                      Counters* d_total2,
                      Counters* d_max2) {
+  using HashT = std::uint32_t;
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
-  const int n_tileEdges = dyn_shmem_bytes/sizeof(IndexT) - (n_tileNodes+1);
+
+  IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
+  const int n_tileEdges =
+      row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
 
   extern __shared__ IndexT shMem[];
   IndexT* shMemRows = shMem;                        // n_tileNodes + 1 elements
   IndexT* shMemCols = &shMemRows[n_tileNodes+1];    // n_tileEdges elements
-  IndexT* shMemWorkspace = &shMemCols[n_tileEdges]; // n_tileNodes + n_tileEdges + 1 elements
+  HashT* shMemWorkspace = reinterpret_cast<HashT*>(&shMemCols[n_tileEdges]);
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
   typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceT;
@@ -282,7 +291,6 @@ __launch_bounds__(THREADS, BLK_SM)
 void coloring2OnlyHash(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     int dyn_shmem_bytes,     // n_rows + 1 + n_cols
                      SOACounters* soa_total1,
                      SOACounters* soa_max1,
                      SOACounters* soa_total2,
@@ -291,14 +299,18 @@ void coloring2OnlyHash(IndexT* row_ptr,  // global mem
                      Counters* d_max1,
                      Counters* d_total2,
                      Counters* d_max2) {
+  using HashT = std::uint32_t;
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
-  const int n_tileEdges = dyn_shmem_bytes/sizeof(IndexT) - (n_tileNodes+1);
+
+  IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
+  const int n_tileEdges =
+      row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
 
   extern __shared__ IndexT shMem[];
   IndexT* shMemRows = shMem;                        // n_tileNodes + 1 elements
   IndexT* shMemCols = &shMemRows[n_tileNodes+1];    // n_tileEdges elements
-  IndexT* shMemWorkspace = &shMemCols[n_tileEdges]; // n_tileNodes + n_tileEdges + 1 elements
+  HashT* shMemWorkspace = reinterpret_cast<HashT*>(&shMemCols[n_tileEdges]);
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
   typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceT;
@@ -326,7 +338,6 @@ __launch_bounds__(THREADS, BLK_SM)
 void coloring2HashWrite(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     int dyn_shmem_bytes,     // n_rows + 1 + n_cols
                      SOACounters* soa_total1,
                      SOACounters* soa_max1,
                      SOACounters* soa_total2,
@@ -335,14 +346,18 @@ void coloring2HashWrite(IndexT* row_ptr,  // global mem
                      Counters* d_max1,
                      Counters* d_total2,
                      Counters* d_max2) {
+  using HashT = std::uint32_t;
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
-  const int n_tileEdges = dyn_shmem_bytes/sizeof(IndexT) - (n_tileNodes+1);
+
+  IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
+  const int n_tileEdges =
+      row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
 
   extern __shared__ IndexT shMem[];
   IndexT* shMemRows = shMem;                        // n_tileNodes + 1 elements
   IndexT* shMemCols = &shMemRows[n_tileNodes+1];    // n_tileEdges elements
-  IndexT* shMemWorkspace = &shMemCols[n_tileEdges]; // n_tileNodes + n_tileEdges + 1 elements
+  HashT* shMemWorkspace = reinterpret_cast<HashT*>(&shMemCols[n_tileEdges]);
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
   typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceT;
@@ -380,7 +395,6 @@ __launch_bounds__(THREADS, BLK_SM)
 void coloring2FirstRed(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     int dyn_shmem_bytes,     // n_rows + 1 + n_cols
                      SOACounters* soa_total1,
                      SOACounters* soa_max1,
                      SOACounters* soa_total2,
@@ -389,14 +403,18 @@ void coloring2FirstRed(IndexT* row_ptr,  // global mem
                      Counters* d_max1,
                      Counters* d_total2,
                      Counters* d_max2) {
+  using HashT = std::uint32_t;
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
-  const int n_tileEdges = dyn_shmem_bytes/sizeof(IndexT) - (n_tileNodes+1);
+
+  IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
+  const int n_tileEdges =
+      row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
 
   extern __shared__ IndexT shMem[];
   IndexT* shMemRows = shMem;                        // n_tileNodes + 1 elements
   IndexT* shMemCols = &shMemRows[n_tileNodes+1];    // n_tileEdges elements
-  IndexT* shMemWorkspace = &shMemCols[n_tileEdges]; // n_tileNodes + n_tileEdges + 1 elements
+  HashT* shMemWorkspace = reinterpret_cast<HashT*>(&shMemCols[n_tileEdges]);
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
   typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceT;
