@@ -66,3 +66,12 @@ Shared memory für dist2 mit sorting network braucht genaue größe der partitio
 - Übergabeparameter vs gecached laden?
 - wie viele Hash funktionen
 - wieso dist2 so langsam?
+
+# 31.01 
+- plot mit verschiedenen hash funktionen machen -> kollisionen pro bit width
+- using für unsigned hash ergebnisse in kernel
+- hash funktionen in constant memory?
+- cashing in godbolt überprüfen
+- timing vergleichen mit altem projekt und cusparse
+- padding mit cub max value
+- profile dist1 mit 2 blöcken
