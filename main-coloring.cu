@@ -5,6 +5,7 @@
 #include <setup.cuh>
 
 #include <cstdio>
+#include <memory>
 #include <numeric>
 // #include <thrust/host_vector.h>
 // #include <thrust/device_vector.h>
@@ -48,7 +49,7 @@ int main(int argc, char const *argv[]) {
   Tiling tiling(D2_SortNet, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)coloring2KernelBank<int, THREADS, BLK_SM>,
+                (void*)coloring2Kernel<THREADS, BLK_SM, int>,
                 -1, true);
   GPUSetupD2 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
@@ -59,7 +60,7 @@ int main(int argc, char const *argv[]) {
   Tiling tiling(D1, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)coloring1Kernel<int, THREADS, BLK_SM>);
+                (void*)coloring1Kernel<THREADS, BLK_SM, int>);
   GPUSetupD1 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
                        tiling.tile_boundaries.get(),
@@ -83,38 +84,38 @@ int main(int argc, char const *argv[]) {
   dim3 blockSize(THREADS);
 
 #if DIST2
-  coloring2KernelBank<int, THREADS, BLK_SM>
+  coloring2KernelBank<THREADS, BLK_SM>
   <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
                                          gpu_setup.d_col_ptr,
                                          gpu_setup.d_tile_boundaries,
                                          tiling.max_node_degree,
-                                         gpu_setup.d_soa_total1,
-                                         gpu_setup.d_soa_max1,
-                                         gpu_setup.d_soa_total2,
-                                         gpu_setup.d_soa_max2,
+                                         gpu_setup.blocks_total1,
+                                         gpu_setup.blocks_total2,
+                                         gpu_setup.blocks_max1,
+                                         gpu_setup.blocks_max2,
                                          gpu_setup.d_total1,
                                          gpu_setup.d_max1,
                                          gpu_setup.d_total2,
                                          gpu_setup.d_max2);
-  // coloring2Kernel<int, THREADS, BLK_SM>
+  // coloring2Kernel<THREADS, BLK_SM, int>
   // <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
   //                                        gpu_setup.d_col_ptr,
   //                                        gpu_setup.d_tile_boundaries,
-  //                                        gpu_setup.d_soa_total1,
-  //                                        gpu_setup.d_soa_max1,
-  //                                        gpu_setup.d_soa_total2,
-  //                                        gpu_setup.d_soa_max2,
+  //                                        gpu_setup.blocks_total1,
+  //                                        gpu_setup.blocks_total2,
+  //                                        gpu_setup.blocks_max1,
+  //                                        gpu_setup.blocks_max2,
   //                                        gpu_setup.d_total1,
   //                                        gpu_setup.d_max1,
   //                                        gpu_setup.d_total2,
   //                                        gpu_setup.d_max2);
 #else
-  coloring1Kernel<int, THREADS, BLK_SM>
+  coloring1Kernel<THREADS, BLK_SM>
   <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
                                          gpu_setup.d_col_ptr,
                                          gpu_setup.d_tile_boundaries,
-                                         gpu_setup.d_soa_total1,
-                                         gpu_setup.d_soa_max1,
+                                         gpu_setup.blocks_total1,
+                                         gpu_setup.blocks_max1,
                                          gpu_setup.d_total1,
                                          gpu_setup.d_max1);
 #endif
@@ -125,8 +126,8 @@ int main(int argc, char const *argv[]) {
   //====================================
   // Allocate memory for results on host
   //====================================
-  std::unique_ptr<Counters[]> total1(new Counters[hash_params.len]);
-  std::unique_ptr<Counters[]> max1(new Counters[hash_params.len]);
+  auto total1 = std::make_unique<Counters[]>(hash_params.len);
+  auto max1 = std::make_unique<Counters[]>(hash_params.len);
   cudaMemcpy(total1.get(), gpu_setup.d_total1, hash_params.len * sizeof(Counters),
              cudaMemcpyDeviceToHost);
   cudaMemcpy(max1.get(), gpu_setup.d_max1, hash_params.len * sizeof(Counters),
@@ -135,8 +136,8 @@ int main(int argc, char const *argv[]) {
   printResult(total1[0], max1[0]);
 
 #if DIST2
-  std::unique_ptr<Counters[]> total2(new Counters[hash_params.len]);
-  std::unique_ptr<Counters[]> max2(new Counters[hash_params.len]);
+  auto total2 = std::make_unique<Counters[]>(hash_params.len);
+  auto max2 = std::make_unique<Counters[]>(hash_params.len);
   cudaMemcpy(total2.get(), gpu_setup.d_total2, hash_params.len * sizeof(Counters),
             cudaMemcpyDeviceToHost);
   cudaMemcpy(max2.get(), gpu_setup.d_max2, hash_params.len * sizeof(Counters),

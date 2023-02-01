@@ -1,14 +1,15 @@
 #pragma once
 
-#include <cooperative_groups.h>
-#include <hash.cuh>
 #include <cstdint>    // for mask
-#include <coloringCounters.cuh>
-#include <odd_even_sort.hpp>
 
+#include <cooperative_groups.h>
 #include <thrust/sort.h>
 #include <thrust/execution_policy.h>
 #include <cub/cub.cuh>
+
+#include <hash.cuh>
+#include <coloringCounters.cuh>
+#include <odd_even_sort.hpp>
 
 
 namespace apa22_coloring {
@@ -77,7 +78,7 @@ void D1CollisionsLocal(IndexT* shMemRows,
       if (col != glob_row) {
         const auto col_hash = hash(col, hash_param);
 
-        # pragma unroll num_bit_widths
+        #pragma unroll num_bit_widths
         for (int counter_idx = 0; counter_idx < num_bit_widths; ++counter_idx) {
           int shift_val = start_bit_width + counter_idx;
 
@@ -103,10 +104,11 @@ void D1CollisionsLocal(IndexT* shMemRows,
   cg::this_thread_block().sync();
 }
 
-template <typename ReductionOp>
+template <typename CountT,
+          typename ReductionOp>
 __forceinline__ __device__
-int BlockLoadThreadReduce(int* g_addr, int num_elem, ReductionOp red_op) {
-  int sum = 0;
+CountT BlockLoadThreadReduce(CountT* g_addr, int num_elem, ReductionOp red_op) {
+  CountT sum = 0;
   for (int i = threadIdx.x; i < num_elem; i += blockDim.x) {
     sum = red_op(g_addr[i], sum);
   }
@@ -114,19 +116,25 @@ int BlockLoadThreadReduce(int* g_addr, int num_elem, ReductionOp red_op) {
 }
 
 template <typename CubReduceT,
+          typename CountT,
           typename ReductionOp>
 __forceinline__ __device__
-void D1LastReduction(SOACounters* soa, Counters* out_counters, ReductionOp op,
+void D1LastReduction(CountT* blocks_res, Counters* out_counters, ReductionOp op,
                      typename CubReduceT::TempStorage& temp_storage) {
   int num_valid = cub::min(blockDim.x, gridDim.x);
+  const int elem_p_hash_fn = num_bit_widths * gridDim.x;
   // Initial reduction during load in BlockLoadThreadReduce limits thread
   // local results to at most blockDim.x
 
   // Last block reduction
+  #pragma unroll hash_params.len
   for (int k = 0; k < hash_params.len; ++k) {
+    #pragma unroll num_bit_widths
     for (int i = 0; i < num_bit_widths; ++i) {
-      int* start_addr = soa->m[k] + i * gridDim.x;
-      int accu = BlockLoadThreadReduce(start_addr, gridDim.x, op);
+      int hash_offset = k * elem_p_hash_fn;
+      CountT* start_addr = blocks_res + hash_offset + i * gridDim.x;
+
+      CountT accu = BlockLoadThreadReduce(start_addr, gridDim.x, op);
       accu = CubReduceT(temp_storage).Reduce(accu, op, num_valid);
       cg::this_thread_block().sync();
       if (threadIdx.x == 0) {
@@ -140,19 +148,20 @@ __device__ unsigned int retirementCount = 0;
 
 // We rely on guarantees of tiling i.e. constant tile size
 // (n_rows + n_cols + 1) = constant, NumTiles = gridDim.x
-template <typename IndexT,
-          int THREADS,
+template <int THREADS,
           int BLK_SM,
+          typename IndexT,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
 void coloring1Kernel(IndexT* row_ptr,
                      IndexT* col_ptr,
                      IndexT* tile_boundaries,   // gridDim.x + 1 elements
-                     SOACounters* soa_total,
-                     SOACounters* soa_max,
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
                      Counters* d_total,
                      Counters* d_max) {
+  using CountT = Counters::value_type;
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
@@ -162,9 +171,10 @@ void coloring1Kernel(IndexT* row_ptr,
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
   
-  typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceT;
+  typedef cub::BlockReduce<CountT, THREADS, RED_ALGO> BlockReduceT;
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
+  #pragma unroll hash_params.len
   for (int k = 0; k < hash_params.len; ++k) {
     // thread local array to count collisions
     Counters total_collisions;
@@ -172,20 +182,26 @@ void coloring1Kernel(IndexT* row_ptr,
     D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
                       total_collisions, max_collisions);
 
+    #pragma unroll num_bit_widths
     for (int i = 0; i < num_bit_widths; ++i) {
-      int l1_sum = BlockReduceT(temp_storage)
-                       .Reduce(total_collisions.m[i], cub::Sum{}, n_tileNodes);
+      CountT l1_sum = BlockReduceT(temp_storage)
+                            .Reduce(total_collisions.m[i], cub::Sum{});
       cg::this_thread_block().sync();
-      int l1_max = BlockReduceT(temp_storage)
-                       .Reduce(max_collisions.m[i], cub::Max{}, n_tileNodes);
+      CountT l1_max = BlockReduceT(temp_storage)
+                            .Reduce(max_collisions.m[i], cub::Max{});
       cg::this_thread_block().sync();
 
-      // soa has an int array for each hash function.
+      // block_total* holds mem for all intermediate results of each block.
       // In this array all block reduce results of first counter are stored
       // contiguous followed by the reduce results of the next counter ...
+      // Results for each hash function are stored after each other.
       if(threadIdx.x == 0){
-        soa_total->m[k][partNr + i * gridDim.x] = l1_sum;
-        soa_max->m[k][partNr + i * gridDim.x] = l1_max;
+        const int elem_p_hash_fn = num_bit_widths * gridDim.x;
+        //        hash segment         bit_w segment   block value
+        //        __________________   _____________   ___________
+        int idx = k * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
+        blocks_total1[idx] = l1_sum;
+        blocks_max1[idx] = l1_max;
       }
     }
   }
@@ -200,13 +216,12 @@ void coloring1Kernel(IndexT* row_ptr,
     // block!
     amLast = (ticket == gridDim.x - 1);
   }
-
   cg::this_thread_block().sync();
 
   // The last block reduces the results of all other blocks
   if (amLast) {
-    D1LastReduction<BlockReduceT>(soa_total, d_total, cub::Sum{}, temp_storage);
-    D1LastReduction<BlockReduceT>(soa_max, d_max, cub::Max{}, temp_storage);
+    D1LastReduction<BlockReduceT>(blocks_total1, d_total, cub::Sum{}, temp_storage);
+    D1LastReduction<BlockReduceT>(blocks_max1, d_max, cub::Max{}, temp_storage);
 
     if (threadIdx.x == 0) {
       // reset retirement count so that next run succeeds
@@ -266,7 +281,7 @@ void D2CollisionsLocal(IndexT* shMemRows,
     // Now we actually do reduce_by_key of list with all ones. With bitmask applied to
     // sorted list as keys. Then we find max in reduced array.
 
-    # pragma unroll num_bit_widths
+    #pragma unroll num_bit_widths
     for(int counter_idx = 0; counter_idx < num_bit_widths; ++counter_idx){
       auto shift_val = start_bit_width + counter_idx;
 
@@ -306,24 +321,25 @@ void D2CollisionsLocal(IndexT* shMemRows,
 }
 
 
-template <typename IndexT,
-          int THREADS,
+template <int THREADS,
           int BLK_SM,
+          typename IndexT,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
 void coloring2Kernel(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     SOACounters* soa_total1,
-                     SOACounters* soa_max1,
-                     SOACounters* soa_total2,
-                     SOACounters* soa_max2,
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
+                     Counters::value_type* blocks_total2,
+                     Counters::value_type* blocks_max2,
                      Counters* d_total1,
                      Counters* d_max1,
                      Counters* d_total2,
                      Counters* d_max2) {
-  using HashT = std::uint32_t;  //
+  using HashT = std::uint32_t;
+  using CountT = Counters::value_type;
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
@@ -343,38 +359,44 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
 
-  typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceT;
+  typedef cub::BlockReduce<CountT, THREADS, RED_ALGO> BlockReduceT;
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
+  #pragma unroll hash_params.len
   for (int k = 0; k < hash_params.len; ++k) {
-    Counters total1, max1;
+    // Counters total1, max1;
     Counters total2, max2;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
-                      total1, max1);
+    // D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    //                   total1, max1);
     D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
                       hash_params.val[k], total2, max2);
+    #pragma unroll num_bit_widths
     for (int i = 0; i < num_bit_widths; ++i) {
-      int l1_sum1 = BlockReduceT(temp_storage)
-                       .Reduce(total1.m[i], cub::Sum{}, n_tileNodes);
+      // CountT l1_sum1 = BlockReduceT(temp_storage)
+      //                  .Reduce(total1.m[i], cub::Sum{});
+      // cg::this_thread_block().sync();
+      // CountT l1_max1 = BlockReduceT(temp_storage)
+      //                  .Reduce(max1.m[i], cub::Max{});
+      // cg::this_thread_block().sync();
+      CountT l1_sum2 = BlockReduceT(temp_storage)
+                       .Reduce(total2.m[i], cub::Sum{});
       cg::this_thread_block().sync();
-      int l1_max1 = BlockReduceT(temp_storage)
-                       .Reduce(max1.m[i], cub::Max{}, n_tileNodes);
-      cg::this_thread_block().sync();
-      int l1_sum2 = BlockReduceT(temp_storage)
-                       .Reduce(total2.m[i], cub::Sum{}, n_tileNodes);
-      cg::this_thread_block().sync();
-      int l1_max2 = BlockReduceT(temp_storage)
-                       .Reduce(max2.m[i], cub::Max{}, n_tileNodes);
+      CountT l1_max2 = BlockReduceT(temp_storage)
+                       .Reduce(max2.m[i], cub::Max{});
       cg::this_thread_block().sync();
 
       // soa has an int array for each hash function.
       // In this array all block reduce results of first counter are stored
       // contiguous followed by the reduce results of the next counter ...
       if(threadIdx.x == 0){
-        soa_total1->m[k][partNr + i * gridDim.x] = l1_sum1;
-        soa_max1->m[k][partNr + i * gridDim.x] = l1_max1;
-        soa_total2->m[k][partNr + i * gridDim.x] = l1_sum2;
-        soa_max2->m[k][partNr + i * gridDim.x] = l1_max2;
+        const int elem_p_hash_fn = num_bit_widths * gridDim.x;
+        //        hash segment         bit_w segment   block value
+        //        __________________   _____________   ___________
+        int idx = k * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
+        // blocks_total1[idx] = l1_sum1;
+        // blocks_max1[idx] = l1_max1;
+        blocks_total2[idx] = l1_sum2;
+        blocks_max2[idx] = l1_max2;
       }
     }
   }
@@ -394,11 +416,11 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
 
   // The last block reduces the results of all other blocks
   if (amLast) {
-    D1LastReduction<BlockReduceT>(soa_total1, d_total1, cub::Sum{}, temp_storage);
-    D1LastReduction<BlockReduceT>(soa_max1, d_max1, cub::Max{}, temp_storage);
+    // D1LastReduction<BlockReduceT>(blocks_total1, d_total1, cub::Sum{}, temp_storage);
+    // D1LastReduction<BlockReduceT>(blocks_max1, d_max1, cub::Max{}, temp_storage);
 
-    D1LastReduction<BlockReduceT>(soa_total2, d_total2, cub::Sum{}, temp_storage);
-    D1LastReduction<BlockReduceT>(soa_max2, d_max2, cub::Max{}, temp_storage);
+    D1LastReduction<BlockReduceT>(blocks_total2, d_total2, cub::Sum{}, temp_storage);
+    D1LastReduction<BlockReduceT>(blocks_max2, d_max2, cub::Max{}, temp_storage);
 
     if (threadIdx.x == 0) {
       // reset retirement count so that next run succeeds
@@ -480,7 +502,7 @@ void D2CollisionsLocalBank(IndexT* shMemRows,
     // Now we actually do reduce_by_key of list with all ones. With bitmask applied to
     // sorted list as keys. Then we find max in reduced array.
 
-    # pragma unroll num_bit_widths
+    #pragma unroll num_bit_widths
     for(int counter_idx = 0; counter_idx < num_bit_widths; ++counter_idx){
       auto shift_val = start_bit_width + counter_idx;
 
@@ -519,9 +541,9 @@ void D2CollisionsLocalBank(IndexT* shMemRows,
 
 }
 
-template <typename IndexT,
-          int THREADS,
+template <int THREADS,
           int BLK_SM,
+          typename IndexT,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
@@ -529,15 +551,16 @@ void coloring2KernelBank(IndexT* row_ptr,  // global mem
                          IndexT* col_ptr,  // global mem
                          IndexT* tile_boundaries,
                          int max_node_degree,
-                         SOACounters* soa_total1,
-                         SOACounters* soa_max1,
-                         SOACounters* soa_total2,
-                         SOACounters* soa_max2,
+                         Counters::value_type* blocks_total1,
+                         Counters::value_type* blocks_max1,
+                         Counters::value_type* blocks_total2,
+                         Counters::value_type* blocks_max2,
                          Counters* d_total1,
                          Counters* d_max1,
                          Counters* d_total2,
                          Counters* d_max2) {
   using HashT = std::uint32_t;
+  using CountT = Counters::value_type;
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
@@ -553,40 +576,45 @@ void coloring2KernelBank(IndexT* row_ptr,  // global mem
   // is fine. Tiling guarantees that shMemWorkspace is enough
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
-  typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceT;
 
+  typedef cub::BlockReduce<CountT, THREADS, RED_ALGO> BlockReduceT;
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
-
+  #pragma unroll hash_params.len
   for (int k = 0; k < hash_params.len; ++k) {
-    Counters total1, max1;
+    // Counters total1, max1;
     Counters total2, max2;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
-                      total1, max1);
+    // D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    //                   total1, max1);
     D2CollisionsLocalBank(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
                           max_node_degree, hash_params.val[k], total2, max2);
+    #pragma unroll num_bit_widths
     for (int i = 0; i < num_bit_widths; ++i) {
-      int l1_sum1 = BlockReduceT(temp_storage)
-                       .Reduce(total1.m[i], cub::Sum{}, n_tileNodes);
+      // CountT l1_sum1 = BlockReduceT(temp_storage)
+      //                  .Reduce(total1.m[i], cub::Sum{});
+      // cg::this_thread_block().sync();
+      // CountT l1_max1 = BlockReduceT(temp_storage)
+      //                  .Reduce(max1.m[i], cub::Max{});
+      // cg::this_thread_block().sync();
+      CountT l1_sum2 = BlockReduceT(temp_storage)
+                       .Reduce(total2.m[i], cub::Sum{});
       cg::this_thread_block().sync();
-      int l1_max1 = BlockReduceT(temp_storage)
-                       .Reduce(max1.m[i], cub::Max{}, n_tileNodes);
-      cg::this_thread_block().sync();
-      int l1_sum2 = BlockReduceT(temp_storage)
-                       .Reduce(total2.m[i], cub::Sum{}, n_tileNodes);
-      cg::this_thread_block().sync();
-      int l1_max2 = BlockReduceT(temp_storage)
-                       .Reduce(max2.m[i], cub::Max{}, n_tileNodes);
+      CountT l1_max2 = BlockReduceT(temp_storage)
+                       .Reduce(max2.m[i], cub::Max{});
       cg::this_thread_block().sync();
 
       // soa has an int array for each hash function.
       // In this array all block reduce results of first counter are stored
       // contiguous followed by the reduce results of the next counter ...
       if(threadIdx.x == 0){
-        soa_total1->m[k][partNr + i * gridDim.x] = l1_sum1;
-        soa_max1->m[k][partNr + i * gridDim.x] = l1_max1;
-        soa_total2->m[k][partNr + i * gridDim.x] = l1_sum2;
-        soa_max2->m[k][partNr + i * gridDim.x] = l1_max2;
+        const int elem_p_hash_fn = num_bit_widths * gridDim.x;
+        //        hash segment         bit_w segment   block value
+        //        __________________   _____________   ___________
+        int idx = k * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
+        // blocks_total1[idx] = l1_sum1;
+        // blocks_max1[idx] = l1_max1;
+        blocks_total2[idx] = l1_sum2;
+        blocks_max2[idx] = l1_max2;
       }
     }
   }
@@ -606,11 +634,11 @@ void coloring2KernelBank(IndexT* row_ptr,  // global mem
 
   // The last block reduces the results of all other blocks
   if (amLast) {
-    D1LastReduction<BlockReduceT>(soa_total1, d_total1, cub::Sum{}, temp_storage);
-    D1LastReduction<BlockReduceT>(soa_max1, d_max1, cub::Max{}, temp_storage);
+    // D1LastReduction<BlockReduceT>(blocks_total1, d_total1, cub::Sum{}, temp_storage);
+    // D1LastReduction<BlockReduceT>(blocks_max1, d_max1, cub::Max{}, temp_storage);
 
-    D1LastReduction<BlockReduceT>(soa_total2, d_total2, cub::Sum{}, temp_storage);
-    D1LastReduction<BlockReduceT>(soa_max2, d_max2, cub::Max{}, temp_storage);
+    D1LastReduction<BlockReduceT>(blocks_total2, d_total2, cub::Sum{}, temp_storage);
+    D1LastReduction<BlockReduceT>(blocks_max2, d_max2, cub::Max{}, temp_storage);
 
     if (threadIdx.x == 0) {
       // reset retirement count so that next run succeeds

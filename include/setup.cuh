@@ -153,17 +153,15 @@ class GPUSetupD1 {
   size_t col_ptr_len;
   size_t tile_bound_len;
   int n_tiles;
+  size_t len_blocks_arr;
 
  public:
-
-  //
   int* d_row_ptr;
   int* d_col_ptr;
   int* d_tile_boundaries;
-  SOACounters* d_soa_total1;
-  SOACounters* d_soa_max1;
-  SOACounters h_soa_total1;
-  SOACounters h_soa_max1;
+
+  int* blocks_total1;    // data structure for block reduction results
+  int* blocks_max1;      // data structure for block reduction results
   Counters* d_total1;
   Counters* d_max1;
 
@@ -204,26 +202,13 @@ GPUSetupD1::GPUSetupD1(int* row_ptr,
   //==========================================================
   // Allocate memory for intermediate block reduction results
   //==========================================================
-  // For each bit_width we allocate a counter for each block and for each hash function
+  // For each bit_width we allocate an int counter for each block
+  len_blocks_arr = num_bit_widths * sizeof(Counters::value_type) * n_tiles;
+  // And we do this for each hash function
+  len_blocks_arr *= hash_params.len;
 
-  int len_blocks_arr = num_bit_widths * n_tiles * sizeof(int);
-
-  for (int i = 0; i < hash_params.len; ++i) {
-    cudaMalloc((void**)&(h_soa_total1.m[i]), len_blocks_arr);
-  }
-  for (int i = 0; i < hash_params.len; ++i) {
-    cudaMalloc((void**)&(h_soa_max1.m[i]), len_blocks_arr);
-  }
-  //==========================================================================
-  // Allocate memory for structs holding pointers to intermediate result alloc
-  //==========================================================================
-  cudaMalloc((void**)&d_soa_total1, sizeof(SOACounters));
-  cudaMalloc((void**)&d_soa_max1, sizeof(SOACounters));
-
-  cudaMemcpy(d_soa_total1, &h_soa_total1, sizeof(SOACounters),
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(d_soa_max1, &h_soa_max1, sizeof(SOACounters),
-             cudaMemcpyHostToDevice);
+  cudaMalloc((void**)&(blocks_total1), len_blocks_arr);
+  cudaMalloc((void**)&(blocks_max1), len_blocks_arr);
 
   //==================================
   // Allocate memory for return values
@@ -239,13 +224,8 @@ GPUSetupD1::~GPUSetupD1(){
   cudaFree(this->d_total1);
   cudaFree(this->d_max1);
 
-  cudaFree(this->d_soa_total1);
-  cudaFree(this->d_soa_max1);
-
-  for (int i = 0; i < hash_params.len; ++i) {
-    cudaFree(this->h_soa_total1.m[i]);
-    cudaFree(this->h_soa_max1.m[i]);
-  }
+  cudaFree(this->blocks_total1);
+  cudaFree(this->blocks_max1);
 
   cudaFree(this->d_row_ptr);
   cudaFree(this->d_col_ptr);
@@ -255,10 +235,8 @@ GPUSetupD1::~GPUSetupD1(){
 class GPUSetupD2 : public GPUSetupD1{
  public:
   // additionally for dist2
-  SOACounters* d_soa_total2;
-  SOACounters* d_soa_max2;
-  SOACounters h_soa_total2;
-  SOACounters h_soa_max2;
+  int* blocks_total2;
+  int* blocks_max2;
   Counters* d_total2;
   Counters* d_max2;
 
@@ -275,22 +253,8 @@ GPUSetupD2::GPUSetupD2(int* row_ptr,
                        int n_tiles) :
                        GPUSetupD1(row_ptr, col_ptr, tile_boundaries, n_tiles) {
 
-  int len_blocks_arr = num_bit_widths * n_tiles * sizeof(int);
-
-  for (int i = 0; i < hash_params.len; ++i) {
-    cudaMalloc((void**)&(h_soa_total2.m[i]), len_blocks_arr);
-  }
-  for (int i = 0; i < hash_params.len; ++i) {
-    cudaMalloc((void**)&(h_soa_max2.m[i]), len_blocks_arr);
-  }
-
-  cudaMalloc((void**)&d_soa_total2, sizeof(SOACounters));
-  cudaMalloc((void**)&d_soa_max2, sizeof(SOACounters));
-
-  cudaMemcpy(d_soa_total2, &h_soa_total2, sizeof(SOACounters),
-            cudaMemcpyHostToDevice);
-  cudaMemcpy(d_soa_max2, &h_soa_max2, sizeof(SOACounters),
-            cudaMemcpyHostToDevice);
+  cudaMalloc((void**)&(blocks_total2), len_blocks_arr);
+  cudaMalloc((void**)&(blocks_max2), len_blocks_arr);
 
   cudaMalloc((void**)&d_total2, hash_params.len * sizeof(Counters));
   cudaMalloc((void**)&d_max2, hash_params.len * sizeof(Counters));
@@ -303,13 +267,8 @@ GPUSetupD2::~GPUSetupD2() {
   cudaFree(this->d_total2);
   cudaFree(this->d_max2);
 
-  cudaFree(this->d_soa_total2);
-  cudaFree(this->d_soa_max2);
-
-  for (int i = 0; i < hash_params.len; ++i) {
-    cudaFree(this->h_soa_total2.m[i]);
-    cudaFree(this->h_soa_max2.m[i]);
-  }
+  cudaFree(this->blocks_total2);
+  cudaFree(this->blocks_max2);
 
   // automatic call to base class destructor
 }

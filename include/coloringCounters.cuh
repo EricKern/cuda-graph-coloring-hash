@@ -32,7 +32,8 @@ namespace apa22_coloring {
   static constexpr int start_bit_width{3};
 
   struct Counters {
-    int m[num_bit_widths]{};
+    using value_type = int;
+    value_type m[num_bit_widths]{};
   };
 
   // for each hash function we need an array of gridDim.x * num_bit_widths ints
