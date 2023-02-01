@@ -1,10 +1,10 @@
 #pragma once
 
-#include <coloringCounters.cuh>
 #include <cpumultiply.hpp>  //! header file for tiling
 #include <tiling.hpp>       //! header file for tiling
 
-#include <coloring.cuh>
+#include <coloringCounters.cuh>
+#include <util.cuh>
 #include <defines.hpp>
 
 namespace apa22_coloring {
@@ -113,31 +113,47 @@ Tiling::Tiling(Distance dist,
 
   tile_target_mem = max_dyn_SM/BLK_SM;
   if (dist == D1) {
+    auto calc_tile_size = [](int tile_rows, int tile_cols,
+                             int max_node_degree) -> int {
+      return (tile_cols + tile_rows + 1) * sizeof(int);
+    };
     very_simple_tiling(row_ptr,
                       m_rows,
                       tile_target_mem,
+                      calc_tile_size,
                       &tile_boundaries,
                       &n_tiles,
                       &max_node_degree);
   } else if (dist == D2) {
-    // we can use only half of the shmem to store the tile because we need
-    // the other half to find dist2 collisions
+    // We need double the amount of shmem because we need memory for workspace
+    auto calc_tile_size = [](int tile_rows, int tile_cols,
+                             int max_node_degree) -> int {
+      return (tile_cols + tile_rows + 1) * sizeof(int) * 2;
+    };
     very_simple_tiling(row_ptr,
                       m_rows,
-                      tile_target_mem/2,
+                      tile_target_mem,
+                      calc_tile_size,
                       &tile_boundaries,
                       &n_tiles,
                       &max_node_degree);
   } else if (dist == D2_SortNet) {
     // we can use only half of the shmem to store the tile because we need
-    // the other half to find dist2 collisions and since the 
+    // the other half to find dist2 collisions and since the
+    auto calc_tile_size = [](int tile_rows, int tile_cols,
+                             int max_node_degree) -> int {
+
+      int single_node_mem = roundUp(max_node_degree + 1, 32) + 1;
+      int additional = single_node_mem * tile_rows;
+      return (tile_cols + tile_rows + 1 + additional) * sizeof(int);
+    };
     very_simple_tiling(row_ptr,
                       m_rows,
                       tile_target_mem,
+                      calc_tile_size,
                       &tile_boundaries,
                       &n_tiles,
-                      &max_node_degree,
-                      true);
+                      &max_node_degree);
   } else {
     std::printf("Please pass a valid enum Distance");
   }

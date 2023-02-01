@@ -8,6 +8,7 @@
  **/
 #include <cstdint>
 #include <memory>
+#include <functional>
 
 double // returns time measurement of tiling process (subdivide layers in grouped rows called tiles)
 tiling_partitioning(
@@ -83,7 +84,7 @@ void get_MaxTileSize(const int number_of_tiles,
 void very_simple_tiling(int* row_ptr,
                         int m_rows,
                         int max_tile_size_byte,
+						std::function<int(int, int, int)> calc_tile_size,
                         std::unique_ptr<int[]>* tile_boundaries,
                         int* n_tiles,
-                        int* max_node_degree,
-                        bool bank_conflict_free=false);
+                        int* max_node_degree);

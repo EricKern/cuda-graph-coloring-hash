@@ -10,6 +10,7 @@
 #include <hash.cuh>
 #include <coloringCounters.cuh>
 #include <odd_even_sort.hpp>
+#include <util.cuh>
 
 
 namespace apa22_coloring {
@@ -121,7 +122,6 @@ template <typename CubReduceT,
 __forceinline__ __device__
 void D1LastReduction(CountT* blocks_res, Counters* out_counters, ReductionOp op,
                      typename CubReduceT::TempStorage& temp_storage) {
-  int num_valid = cub::min(blockDim.x, gridDim.x);
   const int elem_p_hash_fn = num_bit_widths * gridDim.x;
   // Initial reduction during load in BlockLoadThreadReduce limits thread
   // local results to at most blockDim.x
@@ -135,7 +135,7 @@ void D1LastReduction(CountT* blocks_res, Counters* out_counters, ReductionOp op,
       CountT* start_addr = blocks_res + hash_offset + i * gridDim.x;
 
       CountT accu = BlockLoadThreadReduce(start_addr, gridDim.x, op);
-      accu = CubReduceT(temp_storage).Reduce(accu, op, num_valid);
+      accu = CubReduceT(temp_storage).Reduce(accu, op);
       cg::this_thread_block().sync();
       if (threadIdx.x == 0) {
         out_counters[k].m[i] = accu;
@@ -428,18 +428,6 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
     }
   }
 
-}
-
-__device__ __forceinline__
-int roundUp(int numToRound, int multiple) {
-    if (multiple == 0)
-        return numToRound;
-
-    int remainder = numToRound % multiple;
-    if (remainder == 0)
-        return numToRound;
-
-    return numToRound + multiple - remainder;
 }
 
 template <typename IndexT,

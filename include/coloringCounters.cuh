@@ -46,6 +46,7 @@ namespace apa22_coloring {
     __host__ __device__ __forceinline__ Counters
     operator()(const Counters& a, const Counters& b) const {
       Counters tmp;
+      #pragma unroll num_bit_widths
       for (auto i = 0; i < num_bit_widths; ++i) {
         tmp.m[i] = a.m[i] + b.m[i];
       }
@@ -57,6 +58,7 @@ namespace apa22_coloring {
     __host__ __device__ __forceinline__ Counters
     operator()(const Counters& a, const Counters& b) const {
       Counters tmp;
+      #pragma unroll num_bit_widths
       for (auto i = 0; i < num_bit_widths; ++i) {
         tmp.m[i] = max(a.m[i], b.m[i]);
       }

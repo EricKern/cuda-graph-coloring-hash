@@ -851,6 +851,7 @@ double tiling_partitioning(const int m_rows,
 #include <numeric>
 #include <stdexcept>
 #include <memory>
+#include <functional>
 
 
 /// @brief 
@@ -926,34 +927,23 @@ void get_MaxTileSize(const int number_of_tiles,
 
 }
 
-inline
-int roundUp(int numToRound, int multiple) {
-    if (multiple == 0)
-        return numToRound;
-
-    int remainder = numToRound % multiple;
-    if (remainder == 0)
-        return numToRound;
-
-    return numToRound + multiple - remainder;
-}
-
 /// @brief 
 /// @param [in] row_ptr 
 /// @param [in] m_rows 
 /// @param [in] max_tile_size_byte 
+/// @param [in] calc_tile_size
+/// function taking(tile_rows, tile_cols, max_node_degree) and returning the
+/// current tile size in byte
 /// @param [out] tile_boundaries 
 /// @param [out] n_tiles 
 /// @param [out] max_node_degree 
 void very_simple_tiling(int* row_ptr,
                         int m_rows,
                         int max_tile_size_byte,
+						std::function<int(int, int, int)> calc_tile_size,
                         std::unique_ptr<int[]>* tile_boundaries,
                         int* n_tiles,
-                        int* max_node_degree,
-						bool bank_conflict_free) {
-  // Instead of passing the bool switch it would be much nicer if we could pass
-  // the rule how to calculate the current size of a tile. But for now it's ok.
+                        int* max_node_degree) {
   int len_row_ptr = m_rows + 1;
   std::vector<int> n_neighbors(len_row_ptr);
   auto start1 = row_ptr;
@@ -979,14 +969,9 @@ void very_simple_tiling(int* row_ptr,
   for (int i = 1; i < m_rows+1; ++i) {
     tile_rows = i - boundaries[tile_num - 1];
     tile_cols += n_neighbors[i];
-	if (bank_conflict_free) {	// tiling to avoid bank conflicts
-		auto single_node_mem = roundUp(*max_node_degree + 1, 32) + 1;
-		auto additional = single_node_mem * tile_rows;
-		current_size = tile_cols + tile_rows + 1 + additional;
-	} else {
-    	current_size = tile_cols + tile_rows + 1;
-	}
-    if (sizeof(int) * current_size > max_tile_size_byte) {
+	current_size = calc_tile_size(tile_rows, tile_cols, *max_node_degree);
+
+    if (current_size > max_tile_size_byte) {
       if (tile_rows == 1) {
         std::printf("Error:");
         throw std::runtime_error(
