@@ -4,19 +4,19 @@
 
 using namespace apa22_coloring;
 
-template <typename IndexT,
-          int THREADS,
+template <int THREADS,
           int BLK_SM,
+          typename IndexT,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
 void coloring1OnlyLoad(IndexT* row_ptr,
-                       IndexT* col_ptr,
-                       IndexT* tile_boundaries,   // gridDim.x + 1 elements
-                       SOACounters* soa_total,
-                       SOACounters* soa_max,
-                       Counters* d_total,
-                       Counters* d_max) {
+                     IndexT* col_ptr,
+                     IndexT* tile_boundaries,   // gridDim.x + 1 elements
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
+                     Counters* d_total,
+                     Counters* d_max) {
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
@@ -27,19 +27,19 @@ void coloring1OnlyLoad(IndexT* row_ptr,
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
 }
 
-template <typename IndexT,
-          int THREADS,
+template <int THREADS,
           int BLK_SM,
+          typename IndexT,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
 void coloring1OnlyHash(IndexT* row_ptr,
-                       IndexT* col_ptr,
-                       IndexT* tile_boundaries,   // gridDim.x + 1 elements
-                       SOACounters* soa_total,
-                       SOACounters* soa_max,
-                       Counters* d_total,
-                       Counters* d_max) {
+                     IndexT* col_ptr,
+                     IndexT* tile_boundaries,   // gridDim.x + 1 elements
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
+                     Counters* d_total,
+                     Counters* d_max) {
   const int partNr = blockIdx.x;
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
@@ -70,17 +70,17 @@ void coloring1OnlyHash(IndexT* row_ptr,
 }
 
 // Still no reduction
-template <typename IndexT,
-          int THREADS,
+template <int THREADS,
           int BLK_SM,
+          typename IndexT,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
 void coloring1HashWrite(IndexT* row_ptr,
                      IndexT* col_ptr,
                      IndexT* tile_boundaries,   // gridDim.x + 1 elements
-                     SOACounters* soa_total,
-                     SOACounters* soa_max,
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
                      Counters* d_total,
                      Counters* d_max) {
   const int partNr = blockIdx.x;
@@ -104,8 +104,12 @@ void coloring1HashWrite(IndexT* row_ptr,
       // In this array all block reduce results of first counter are stored
       // contiguous followed by the reduce results of the next counter ...
       if(threadIdx.x == 0){
-        soa_total->m[k][partNr + i * gridDim.x] = total_collisions.m[i];
-        soa_max->m[k][partNr + i * gridDim.x] = max_collisions.m[i];
+        const int elem_p_hash_fn = num_bit_widths * gridDim.x;
+        //        hash segment         bit_w segment   block value
+        //        __________________   _____________   ___________
+        int idx = k * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
+        blocks_total1[idx] = k * i;
+        blocks_max1[idx] = k + i;
       }
     }
   }
@@ -113,17 +117,17 @@ void coloring1HashWrite(IndexT* row_ptr,
 
 // We rely on guarantees of tiling i.e. constant tile size
 // (n_rows + n_cols + 1) = constant, NumTiles = gridDim.x
-template <typename IndexT,
-          int THREADS,
+template <int THREADS,
           int BLK_SM,
+          typename IndexT,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
 void coloring1FirstReduce(IndexT* row_ptr,
                      IndexT* col_ptr,
                      IndexT* tile_boundaries,   // gridDim.x + 1 elements
-                     SOACounters* soa_total,
-                     SOACounters* soa_max,
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
                      Counters* d_total,
                      Counters* d_max) {
   const int partNr = blockIdx.x;
@@ -157,26 +161,30 @@ void coloring1FirstReduce(IndexT* row_ptr,
       // In this array all block reduce results of first counter are stored
       // contiguous followed by the reduce results of the next counter ...
       if(threadIdx.x == 0){
-        soa_total->m[k][partNr + i * gridDim.x] = l1_sum;
-        soa_max->m[k][partNr + i * gridDim.x] = l1_max;
+        const int elem_p_hash_fn = num_bit_widths * gridDim.x;
+        //        hash segment         bit_w segment   block value
+        //        __________________   _____________   ___________
+        int idx = k * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
+        blocks_total1[idx] = l1_sum;
+        blocks_max1[idx] = l1_max;
       }
     }
   }
 }
 
-template <typename IndexT,
-          int THREADS,
+template <int THREADS,
           int BLK_SM,
+          typename IndexT,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
 void coloring2OnlyLoad(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     SOACounters* soa_total1,
-                     SOACounters* soa_max1,
-                     SOACounters* soa_total2,
-                     SOACounters* soa_max2,
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
+                     Counters::value_type* blocks_total2,
+                     Counters::value_type* blocks_max2,
                      Counters* d_total1,
                      Counters* d_max1,
                      Counters* d_total2,
@@ -198,19 +206,19 @@ void coloring2OnlyLoad(IndexT* row_ptr,  // global mem
 }
 
 
-template <typename IndexT,
-          int THREADS,
+template <int THREADS,
           int BLK_SM,
+          typename IndexT,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
 void coloring2OnlyHashD1(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     SOACounters* soa_total1,
-                     SOACounters* soa_max1,
-                     SOACounters* soa_total2,
-                     SOACounters* soa_max2,
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
+                     Counters::value_type* blocks_total2,
+                     Counters::value_type* blocks_max2,
                      Counters* d_total1,
                      Counters* d_max1,
                      Counters* d_total2,
@@ -239,19 +247,19 @@ void coloring2OnlyHashD1(IndexT* row_ptr,  // global mem
   }
 }
 
-template <typename IndexT,
-          int THREADS,
+template <int THREADS,
           int BLK_SM,
+          typename IndexT,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
 void coloring2OnlyHashD2(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     SOACounters* soa_total1,
-                     SOACounters* soa_max1,
-                     SOACounters* soa_total2,
-                     SOACounters* soa_max2,
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
+                     Counters::value_type* blocks_total2,
+                     Counters::value_type* blocks_max2,
                      Counters* d_total1,
                      Counters* d_max1,
                      Counters* d_total2,
@@ -282,19 +290,19 @@ void coloring2OnlyHashD2(IndexT* row_ptr,  // global mem
   }
 }
 
-template <typename IndexT,
-          int THREADS,
+template <int THREADS,
           int BLK_SM,
+          typename IndexT,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
 void coloring2OnlyHash(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     SOACounters* soa_total1,
-                     SOACounters* soa_max1,
-                     SOACounters* soa_total2,
-                     SOACounters* soa_max2,
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
+                     Counters::value_type* blocks_total2,
+                     Counters::value_type* blocks_max2,
                      Counters* d_total1,
                      Counters* d_max1,
                      Counters* d_total2,
@@ -329,19 +337,19 @@ void coloring2OnlyHash(IndexT* row_ptr,  // global mem
 }
 
 
-template <typename IndexT,
-          int THREADS,
+template <int THREADS,
           int BLK_SM,
+          typename IndexT,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
 void coloring2HashWrite(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     SOACounters* soa_total1,
-                     SOACounters* soa_max1,
-                     SOACounters* soa_total2,
-                     SOACounters* soa_max2,
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
+                     Counters::value_type* blocks_total2,
+                     Counters::value_type* blocks_max2,
                      Counters* d_total1,
                      Counters* d_max1,
                      Counters* d_total2,
@@ -373,32 +381,31 @@ void coloring2HashWrite(IndexT* row_ptr,  // global mem
     D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
                       hash_params.val[k], total2, max2);
     for (int i = 0; i < num_bit_widths; ++i) {
-      // soa has an int array for each hash function.
-      // In this array all block reduce results of first counter are stored
-      // contiguous followed by the reduce results of the next counter ...
-      if(threadIdx.x == 0){
-        soa_total1->m[k][partNr + i * gridDim.x] = k + i;
-        soa_max1->m[k][partNr + i * gridDim.x] = i - k;
-        soa_total2->m[k][partNr + i * gridDim.x] = k - i;
-        soa_max2->m[k][partNr + i * gridDim.x] = i * k;
+        const int elem_p_hash_fn = num_bit_widths * gridDim.x;
+        //        hash segment         bit_w segment   block value
+        //        __________________   _____________   ___________
+        int idx = k * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
+        blocks_total1[idx] = i * k;
+        blocks_max1[idx] = k - i;
+        blocks_total2[idx] = i - k;
+        blocks_max2[idx] = i + k;
       }
     }
-  }
 }
 
-template <typename IndexT,
-          int THREADS,
+template <int THREADS,
           int BLK_SM,
+          typename IndexT,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
 void coloring2FirstRed(IndexT* row_ptr,  // global mem
                      IndexT* col_ptr,  // global mem
                      IndexT* tile_boundaries,
-                     SOACounters* soa_total1,
-                     SOACounters* soa_max1,
-                     SOACounters* soa_total2,
-                     SOACounters* soa_max2,
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
+                     Counters::value_type* blocks_total2,
+                     Counters::value_type* blocks_max2,
                      Counters* d_total1,
                      Counters* d_max1,
                      Counters* d_total2,
@@ -447,10 +454,14 @@ void coloring2FirstRed(IndexT* row_ptr,  // global mem
       // In this array all block reduce results of first counter are stored
       // contiguous followed by the reduce results of the next counter ...
       if(threadIdx.x == 0){
-        soa_total1->m[k][partNr + i * gridDim.x] = l1_sum1;
-        soa_max1->m[k][partNr + i * gridDim.x] = l1_max1;
-        soa_total2->m[k][partNr + i * gridDim.x] = l1_sum2;
-        soa_max2->m[k][partNr + i * gridDim.x] = l1_max2;
+        const int elem_p_hash_fn = num_bit_widths * gridDim.x;
+        //        hash segment         bit_w segment   block value
+        //        __________________   _____________   ___________
+        int idx = k * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
+        blocks_total1[idx] = l1_sum1;
+        blocks_max1[idx] = l1_max1;
+        blocks_total2[idx] = l1_sum2;
+        blocks_max2[idx] = l1_max2;
       }
     }
   }

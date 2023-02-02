@@ -42,14 +42,14 @@ int main(int argc, char const *argv[]) {
 
   int mat_nr = 2;          //Default value
   chCommandLineGet<int>(&mat_nr, "m", argc, argv);
-  auto Mat = def::choseMat(mat_nr);
+  auto Mat = def::CurlCurl_4;
 
   #if DIST2
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
   Tiling tiling(D2_SortNet, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)coloring2Kernel<THREADS, BLK_SM, int>,
+                (void*)coloring2KernelBank<THREADS, BLK_SM, int>,
                 -1, true);
   GPUSetupD2 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,

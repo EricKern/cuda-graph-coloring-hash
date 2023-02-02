@@ -1,354 +1,276 @@
 #include <nvbench/nvbench.cuh>
+#include <cusparse.h>
+#include <thrust/device_vector.h>
 
-#include "kernel_setup.hpp"
+#include "coloring.cuh"
 #include "defines.hpp"
 #include "coloringCounters.cuh"
 #include "copyKernel.cuh"
+#include "setup.cuh"
 
-// static constexpr const char* Mat = def::Mat3_Cluster;
-static constexpr const char* Mat = def::Mat3;
-static constexpr int STEPS = 300;
+static constexpr const char* Mat = def::CurlCurl_4;;
+static constexpr const char* MAT_NAME = "CurlCurl_4";
+static constexpr int MAX_THREADS_SM = 1024;  // Turing (2080ti)
 
 using namespace apa22_coloring;
 
-template <bool dist2 = false>
-void initBenchmark(const char* Matrix, int* &d_row_ptr, int* &d_col_ptr, int* &d_tile_boundaries,
-                    SOACounters* &d_soa_total, SOACounters* &d_soa_max, SOACounters &h_soa_total,
-                    SOACounters &h_soa_max, Counters* &d_total, Counters* &d_max, int &max_nodes,
-                    int &max_edges, int &shMem_size_bytes, int &number_of_tiles, size_t &size){
-    int* row_ptr;
-    int* col_ptr;
-    double* val_ptr;
-    int m_rows;
-    int* ndc_;
+template <int BLK_SM>
+void Distance1(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+    constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+    auto kernel = coloring1Kernel<THREADS, BLK_SM, int>;
 
-    if constexpr (dist2){
-        kernel_setup<true>(Matrix, row_ptr, col_ptr, val_ptr, ndc_, m_rows, number_of_tiles, shMem_size_bytes, STEPS);
-    }
-    else{
-        kernel_setup(Matrix, row_ptr, col_ptr, val_ptr, ndc_, m_rows, number_of_tiles, shMem_size_bytes, STEPS);
-    }
-  
-    size_t row_ptr_len = m_rows + 1;
-    size_t col_ptr_len = row_ptr[m_rows];
+    MatLoader& mat_loader = MatLoader::getInstance(Mat);
+    Tiling tiling(D1, BLK_SM,
+                mat_loader.row_ptr,
+                mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+    GPUSetupD1 gpu_setup(mat_loader.row_ptr,
+                        mat_loader.col_ptr,
+                        tiling.tile_boundaries.get(),
+                        tiling.n_tiles);
 
-    size = row_ptr_len + col_ptr_len;
-    size_t tile_bound_len = number_of_tiles + 1;
-
-    cudaMalloc((void**)&d_row_ptr, row_ptr_len * sizeof(int));
-    cudaMalloc((void**)&d_col_ptr, col_ptr_len * sizeof(int));
-    cudaMalloc((void**)&d_tile_boundaries, tile_bound_len * sizeof(int));
-
-
-    cudaMemcpy(d_row_ptr, row_ptr, row_ptr_len * sizeof(int),
-             cudaMemcpyHostToDevice);
-    cudaMemcpy(d_col_ptr, col_ptr, col_ptr_len * sizeof(int),
-             cudaMemcpyHostToDevice);
-    cudaMemcpy(d_tile_boundaries, ndc_, tile_bound_len * sizeof(int),
-             cudaMemcpyHostToDevice);
-
-    // For each bit_width we allocate a counter for each block and for each hash function
-    for (int i = 0; i < hash_params.len; ++i) {
-        cudaMalloc((void**)&(h_soa_total.m[i]), num_bit_widths * number_of_tiles * sizeof(int));
-    }
-    for (int i = 0; i < hash_params.len; ++i) {
-        cudaMalloc((void**)&(h_soa_max.m[i]), num_bit_widths * number_of_tiles * sizeof(int));
-    }
-   
-    cudaMalloc((void**)&d_soa_total, sizeof(SOACounters));
-
-    cudaMalloc((void**)&d_soa_max, sizeof(SOACounters));
-
-    cudaMemcpy(d_soa_total, &h_soa_total, sizeof(SOACounters),
-             cudaMemcpyHostToDevice);
-    cudaMemcpy(d_soa_max, &h_soa_max, sizeof(SOACounters),
-             cudaMemcpyHostToDevice);
-
- 
-    cudaMalloc((void**)&d_total, hash_params.len * sizeof(Counters));
-    cudaMalloc((void**)&d_max, hash_params.len * sizeof(Counters));
-  
-    get_MaxTileSize(number_of_tiles, ndc_, row_ptr, &max_nodes, &max_edges);
-
-    delete[] row_ptr;
-    delete[] col_ptr;
-	delete[] val_ptr;
-	delete[] ndc_;
-}
-
-void initBenchmarkD2(SOACounters &h_soa_total2, SOACounters &h_soa_max2, SOACounters* &d_soa_total2,
-                    SOACounters* &d_soa_max2, Counters* &d_total2, Counters* &d_max2, int number_of_tiles){
-    for (int i = 0; i < hash_params.len; ++i) {
-      cudaMalloc((void**)&(h_soa_total2.m[i]), num_bit_widths * number_of_tiles * sizeof(int));
-    }
-    for (int i = 0; i < hash_params.len; ++i) {
-      cudaMalloc((void**)&(h_soa_max2.m[i]), num_bit_widths * number_of_tiles * sizeof(int));
-    }
-
-    cudaMalloc((void**)&d_soa_total2, sizeof(SOACounters));
-    cudaMalloc((void**)&d_soa_max2, sizeof(SOACounters));
-
-    cudaMemcpy(d_soa_total2, &h_soa_total2, sizeof(SOACounters),
-              cudaMemcpyHostToDevice);
-    cudaMemcpy(d_soa_max2, &h_soa_max2, sizeof(SOACounters),
-              cudaMemcpyHostToDevice);
-
-    cudaMalloc((void**)&d_total2, hash_params.len * sizeof(Counters));
-    cudaMalloc((void**)&d_max2, hash_params.len * sizeof(Counters));
-}
-
-void copyBenchDist1(nvbench::state &state){
-    int* d_row_ptr;
-    int* d_col_ptr;
-    int* d_tile_boundaries;
-    SOACounters* d_soa_total;
-    SOACounters* d_soa_max;
-    SOACounters h_soa_total;
-    SOACounters h_soa_max;
-    Counters* d_total;
-    Counters* d_max;
-    int shMem_size_bytes;
-    int number_of_tiles;
-    int max_nodes;
-    int max_edges;
-    size_t size;
-
-    state.set_timeout(-1);
-    initBenchmark(Mat, d_row_ptr, d_col_ptr, d_tile_boundaries, d_soa_total, d_soa_max,
-                h_soa_total, h_soa_max, d_total, d_max, max_nodes, max_edges, shMem_size_bytes,
-                number_of_tiles, size);
-    
-    size_t g_mem_writes = hash_params.len * num_bit_widths * number_of_tiles * sizeof(int);
-    g_mem_writes *= 2;
-    g_mem_writes += 2 * hash_params.len * sizeof(Counters);
-    state.add_element_count(size, "Elements");
-    state.add_global_memory_reads<int>(size);
-    state.add_global_memory_writes<char>(g_mem_writes);
-    state.collect_dram_throughput();
-    state.collect_l1_hit_rates();
-    state.collect_l2_hit_rates();
-    state.collect_loads_efficiency();
-    state.collect_stores_efficiency();
-
-    dim3 gridSize(number_of_tiles);
+    size_t shMem_bytes = tiling.tile_target_mem;
+    dim3 gridSize(tiling.n_tiles);
     dim3 blockSize(THREADS);
 
-    state.exec([&](nvbench::launch &launch){
-        copyKernelDist1<<<gridSize, blockSize, shMem_size_bytes, launch.get_stream()>>>(
-            d_row_ptr, d_col_ptr, d_tile_boundaries, max_nodes, max_edges, d_soa_total,
-            d_soa_max, d_total, d_max);
-    });
+    state.add_element_count(0, MAT_NAME);
+    state.add_element_count(mat_loader.m_rows, "Rows");
+    state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
 
-    for (int i = 0; i < hash_params.len; ++i) {
-        cudaFree(h_soa_total.m[i]);
-        cudaFree(h_soa_max.m[i]);
-    }
-    cudaFree(d_row_ptr);
-    cudaFree(d_col_ptr);
-    cudaFree(d_tile_boundaries);
-    cudaFree(d_soa_total);
-    cudaFree(d_soa_max);
-    cudaFree(d_total);
-    cudaFree(d_max);
+    state.exec([&](nvbench::launch& launch) {
+        kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+            gpu_setup.d_row_ptr,
+            gpu_setup.d_col_ptr,
+            gpu_setup.d_tile_boundaries,
+            gpu_setup.blocks_total1,
+            gpu_setup.blocks_max1,
+            gpu_setup.d_total1,
+            gpu_setup.d_max1);
+    });
 }
 
-void coloring1Bench(nvbench::state &state){
-    int* d_row_ptr;
-    int* d_col_ptr;
-    int* d_tile_boundaries;
-    SOACounters* d_soa_total;
-    SOACounters* d_soa_max;
-    SOACounters h_soa_total;
-    SOACounters h_soa_max;
-    Counters* d_total;
-    Counters* d_max;
-    int shMem_size_bytes;
-    int number_of_tiles;
-    int max_nodes;
-    int max_edges;
-    size_t size;
+template <int BLK_SM>
+void Distance1Copy(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+    constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+    auto kernel = copyKernelDist1<THREADS, BLK_SM, int>;
 
-    state.set_timeout(-1);
-    initBenchmark(Mat, d_row_ptr, d_col_ptr, d_tile_boundaries, d_soa_total, d_soa_max,
-                h_soa_total, h_soa_max, d_total, d_max, max_nodes, max_edges, shMem_size_bytes,
-                number_of_tiles, size);
-    
-    size_t g_mem_writes = hash_params.len * num_bit_widths * number_of_tiles * sizeof(int);
-    g_mem_writes *= 2;
-    g_mem_writes += 2 * hash_params.len * sizeof(Counters);
-    state.add_element_count(size, "Elements");
-    state.add_global_memory_reads<int>(size);
-    state.add_global_memory_writes<char>(g_mem_writes);
-    state.collect_dram_throughput();
-    state.collect_l1_hit_rates();
-    state.collect_l2_hit_rates();
-    state.collect_loads_efficiency();
-    state.collect_stores_efficiency();
+    MatLoader& mat_loader = MatLoader::getInstance(Mat);
+    Tiling tiling(D1, BLK_SM,
+                mat_loader.row_ptr,
+                mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+    GPUSetupD1 gpu_setup(mat_loader.row_ptr,
+                        mat_loader.col_ptr,
+                        tiling.tile_boundaries.get(),
+                        tiling.n_tiles);
 
-    dim3 gridSize(number_of_tiles);
+    size_t shMem_bytes = tiling.tile_target_mem;
+    dim3 gridSize(tiling.n_tiles);
     dim3 blockSize(THREADS);
 
-    state.exec([&](nvbench::launch &launch){
-        coloring1Kernel<<<gridSize, blockSize, shMem_size_bytes, launch.get_stream()>>>(
-            d_row_ptr, d_col_ptr, d_tile_boundaries, max_nodes, max_edges, d_soa_total,
-            d_soa_max, d_total, d_max);
-    });
+    state.add_element_count(0, MAT_NAME);
+    state.add_element_count(mat_loader.m_rows, "Rows");
+    state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
 
-    for (int i = 0; i < hash_params.len; ++i) {
-        cudaFree(h_soa_total.m[i]);
-        cudaFree(h_soa_max.m[i]);
-    }
-    cudaFree(d_row_ptr);
-    cudaFree(d_col_ptr);
-    cudaFree(d_tile_boundaries);
-    cudaFree(d_soa_total);
-    cudaFree(d_soa_max);
-    cudaFree(d_total);
-    cudaFree(d_max);
+    state.exec([&](nvbench::launch& launch) {
+        kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+            gpu_setup.d_row_ptr,
+            gpu_setup.d_col_ptr,
+            gpu_setup.d_tile_boundaries,
+            gpu_setup.blocks_total1,
+            gpu_setup.blocks_max1,
+            gpu_setup.d_total1,
+            gpu_setup.d_max1);
+    });
 }
 
-void copyBenchDist2(nvbench::state &state){
-    int* d_row_ptr;
-    int* d_col_ptr;
-    int* d_tile_boundaries;
-    SOACounters* d_soa_total1;
-    SOACounters* d_soa_max1;
-    SOACounters* d_soa_total2;
-    SOACounters* d_soa_max2;
-    SOACounters h_soa_total1;
-    SOACounters h_soa_max1;
-    SOACounters h_soa_total2;
-    SOACounters h_soa_max2;
-    Counters* d_total1;
-    Counters* d_max1;
-    Counters* d_total2;
-    Counters* d_max2;
-    int shMem_size_bytes;
-    int number_of_tiles;
-    int max_nodes;
-    int max_edges;
-    size_t size;
+template <int BLK_SM>
+void Distance2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+    constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+    auto kernel = coloring2Kernel<THREADS, BLK_SM, int>;
 
-    state.set_timeout(-1);
-    initBenchmark<true>(Mat, d_row_ptr, d_col_ptr, d_tile_boundaries, d_soa_total1, d_soa_max1,
-                h_soa_total1, h_soa_max1, d_total1, d_max1, max_nodes, max_edges, shMem_size_bytes,
-                number_of_tiles, size);
-    initBenchmarkD2(h_soa_total2, h_soa_max2, d_soa_total2, d_soa_max2, d_total2, d_max2,
-                    number_of_tiles);
-    
-    size_t g_mem_writes = hash_params.len * num_bit_widths * number_of_tiles * sizeof(int);
-    g_mem_writes *= 2;
-    g_mem_writes += 2 * hash_params.len * sizeof(Counters);
-    g_mem_writes *= 2;  // double mem writes compared to dist1
-    state.add_element_count(size, "Elements");
-    state.add_global_memory_reads<int>(size);
-    state.add_global_memory_writes<char>(g_mem_writes);
-    state.collect_dram_throughput();
-    state.collect_l1_hit_rates();
-    state.collect_l2_hit_rates();
-    state.collect_loads_efficiency();
-    state.collect_stores_efficiency();
+    MatLoader& mat_loader = MatLoader::getInstance(Mat);
+    Tiling tiling(D2, BLK_SM,
+                mat_loader.row_ptr,
+                mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+    GPUSetupD2 gpu_setup(mat_loader.row_ptr,
+                        mat_loader.col_ptr,
+                        tiling.tile_boundaries.get(),
+                        tiling.n_tiles);
 
-    dim3 gridSize(number_of_tiles);
+    size_t shMem_bytes = tiling.tile_target_mem;
+    dim3 gridSize(tiling.n_tiles);
     dim3 blockSize(THREADS);
 
-    state.exec([&](nvbench::launch &launch){
-        copyKernelDist2<<<gridSize, blockSize, shMem_size_bytes, launch.get_stream()>>>(d_row_ptr,
-                        d_col_ptr, d_tile_boundaries, max_nodes, max_edges, d_soa_total1, d_soa_max1,
-                        d_soa_total2, d_soa_max2, d_total1, d_max1, d_total2, d_max2);
-    });
+    state.add_element_count(0, MAT_NAME);
+    state.add_element_count(mat_loader.m_rows, "Rows");
+    state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
 
-    for (int i = 0; i < hash_params.len; ++i) {
-        cudaFree(h_soa_total1.m[i]);
-        cudaFree(h_soa_max1.m[i]);
-        cudaFree(h_soa_total2.m[i]);
-        cudaFree(h_soa_max2.m[i]);
-    }
-    cudaFree(d_row_ptr);
-    cudaFree(d_col_ptr);
-    cudaFree(d_tile_boundaries);
-    cudaFree(d_soa_total1);
-    cudaFree(d_soa_total2);
-    cudaFree(d_soa_max1);
-    cudaFree(d_soa_max2);
-    cudaFree(d_total1);
-    cudaFree(d_total2);
-    cudaFree(d_max1);
-    cudaFree(d_max2);
+    state.exec([&](nvbench::launch& launch) {
+        kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+                gpu_setup.d_row_ptr,
+                gpu_setup.d_col_ptr,
+                gpu_setup.d_tile_boundaries,
+                gpu_setup.blocks_total1,
+                gpu_setup.blocks_max1,
+                gpu_setup.blocks_total2,
+                gpu_setup.blocks_max2,
+                gpu_setup.d_total1,
+                gpu_setup.d_max1,
+                gpu_setup.d_total2,
+                gpu_setup.d_max2);
+    });
 }
 
-void coloring2Bench(nvbench::state &state){
-    int* d_row_ptr;
-    int* d_col_ptr;
-    int* d_tile_boundaries;
-    SOACounters* d_soa_total1;
-    SOACounters* d_soa_max1;
-    SOACounters* d_soa_total2;
-    SOACounters* d_soa_max2;
-    SOACounters h_soa_total1;
-    SOACounters h_soa_max1;
-    SOACounters h_soa_total2;
-    SOACounters h_soa_max2;
-    Counters* d_total1;
-    Counters* d_max1;
-    Counters* d_total2;
-    Counters* d_max2;
-    int shMem_size_bytes;
-    int number_of_tiles;
-    int max_nodes;
-    int max_edges;
-    size_t size;
+template <int BLK_SM>
+void Distance2Bank(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+    constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+    auto kernel = coloring2KernelBank<THREADS, BLK_SM, int>;
 
-    state.set_timeout(-1);
-    initBenchmark<true>(Mat, d_row_ptr, d_col_ptr, d_tile_boundaries, d_soa_total1, d_soa_max1,
-                h_soa_total1, h_soa_max1, d_total1, d_max1, max_nodes, max_edges, shMem_size_bytes,
-                number_of_tiles, size);
-    initBenchmarkD2(h_soa_total2, h_soa_max2, d_soa_total2, d_soa_max2, d_total2, d_max2,
-                    number_of_tiles);
-    
-    size_t g_mem_writes = hash_params.len * num_bit_widths * number_of_tiles * sizeof(int);
-    g_mem_writes *= 2;
-    g_mem_writes += 2 * hash_params.len * sizeof(Counters);
-    g_mem_writes *= 2;  // double mem writes compared to dist1
-    state.add_element_count(size, "Elements");
-    state.add_global_memory_reads<int>(size);
-    state.add_global_memory_writes<char>(g_mem_writes);
-    state.collect_dram_throughput();
-    state.collect_l1_hit_rates();
-    state.collect_l2_hit_rates();
-    state.collect_loads_efficiency();
-    state.collect_stores_efficiency();
+    MatLoader& mat_loader = MatLoader::getInstance(Mat);
+    Tiling tiling(D2_SortNet, BLK_SM,
+                mat_loader.row_ptr,
+                mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+    GPUSetupD2 gpu_setup(mat_loader.row_ptr,
+                        mat_loader.col_ptr,
+                        tiling.tile_boundaries.get(),
+                        tiling.n_tiles);
 
-    dim3 gridSize(number_of_tiles);
+    size_t shMem_bytes = tiling.tile_target_mem;
+    dim3 gridSize(tiling.n_tiles);
     dim3 blockSize(THREADS);
 
-    state.exec([&](nvbench::launch &launch){
-        coloring2Kernel<<<gridSize, blockSize, shMem_size_bytes, launch.get_stream()>>>(d_row_ptr,
-                        d_col_ptr, d_tile_boundaries, max_nodes, max_edges, d_soa_total1, d_soa_max1,
-                        d_soa_total2, d_soa_max2, d_total1, d_max1, d_total2, d_max2);
+    state.add_element_count(0, MAT_NAME);
+    state.add_element_count(mat_loader.m_rows, "Rows");
+    state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
+    state.exec([&](nvbench::launch& launch) {
+        kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+                gpu_setup.d_row_ptr,
+                gpu_setup.d_col_ptr,
+                gpu_setup.d_tile_boundaries,
+                tiling.max_node_degree,
+                gpu_setup.blocks_total1,
+                gpu_setup.blocks_max1,
+                gpu_setup.blocks_total2,
+                gpu_setup.blocks_max2,
+                gpu_setup.d_total1,
+                gpu_setup.d_max1,
+                gpu_setup.d_total2,
+                gpu_setup.d_max2);
+    });
+}
+
+template <int BLK_SM>
+void Distance2Copy(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+    constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+    auto kernel = copyKernelDist2<THREADS, BLK_SM, int>;
+
+    MatLoader& mat_loader = MatLoader::getInstance(Mat);
+    Tiling tiling(D2, BLK_SM,
+                mat_loader.row_ptr,
+                mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+    GPUSetupD2 gpu_setup(mat_loader.row_ptr,
+                        mat_loader.col_ptr,
+                        tiling.tile_boundaries.get(),
+                        tiling.n_tiles);
+        
+    size_t shMem_bytes = tiling.tile_target_mem;
+    dim3 gridSize(tiling.n_tiles);
+    dim3 blockSize(THREADS);
+
+    state.add_element_count(0, MAT_NAME);
+    state.add_element_count(mat_loader.m_rows, "Rows");
+    state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
+    state.exec([&](nvbench::launch& launch) {
+        kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+                gpu_setup.d_row_ptr,
+                gpu_setup.d_col_ptr,
+                gpu_setup.d_tile_boundaries,
+                gpu_setup.blocks_total1,
+                gpu_setup.blocks_max1,
+                gpu_setup.blocks_total2,
+                gpu_setup.blocks_max2,
+                gpu_setup.d_total1,
+                gpu_setup.d_max1,
+                gpu_setup.d_total2,
+                gpu_setup.d_max2);
+    });
+}
+
+void Distance1cusparse(nvbench::state &state) {
+    cusparseHandle_t handle;
+	cusparseCreate(&handle);
+	cusparseMatDescr_t descG;
+	// creates descriptor for 0-based indexing and general matrix by default
+	cusparseCreateMatDescr(&descG);
+
+	cusparseColorInfo_t info;
+	cusparseCreateColorInfo(&info);
+
+	// fraction of vertices that has to be colored iteratively before falling back
+	// to giving every leftover node an unique color
+	constexpr double fraction = 1.0;
+
+	int num_colors; // will be updated by cusparse
+
+    MatLoader& mat_loader = MatLoader::getInstance();
+
+    double* d_val_ptr;
+    int* d_col_ptr;
+    int* d_row_ptr; 
+    cudaMalloc((void**)&d_val_ptr, mat_loader.row_ptr[mat_loader.m_rows] * sizeof(double));
+    cudaMalloc((void**)&d_col_ptr, mat_loader.row_ptr[mat_loader.m_rows] * sizeof(int));
+    cudaMalloc((void**)&d_row_ptr, (mat_loader.m_rows + 1) * sizeof(int));
+    
+    cudaMemcpy(d_val_ptr, mat_loader.val_ptr, mat_loader.row_ptr[mat_loader.m_rows] * sizeof(double),
+                cudaMemcpyHostToDevice);
+    cudaMemcpy(d_col_ptr, mat_loader.col_ptr, mat_loader.row_ptr[mat_loader.m_rows] * sizeof(int),
+                cudaMemcpyHostToDevice);
+    cudaMemcpy(d_row_ptr, mat_loader.row_ptr, mat_loader.m_rows * sizeof(int),
+                cudaMemcpyHostToDevice);
+
+    thrust::device_vector<int> coloring(mat_loader.row_ptr[mat_loader.m_rows]);
+
+    state.add_element_count(0, MAT_NAME);
+    state.add_element_count(mat_loader.m_rows, "Rows");
+    state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {		
+		    cusparseDcsrcolor(handle,
+		                      mat_loader.m_rows,
+		                      mat_loader.row_ptr[mat_loader.m_rows],
+		                      descG,
+		                      d_val_ptr,
+		                      d_row_ptr,
+		                      d_col_ptr,
+		                      &fraction,
+		                      &num_colors,
+		                      thrust::raw_pointer_cast(coloring.data()),
+		                      nullptr, // don't need reordering
+		                      info);
     });
 
-    for (int i = 0; i < hash_params.len; ++i) {
-        cudaFree(h_soa_total1.m[i]);
-        cudaFree(h_soa_max1.m[i]);
-        cudaFree(h_soa_total2.m[i]);
-        cudaFree(h_soa_max2.m[i]);
-    }
-    cudaFree(d_row_ptr);
+    state.add_element_count(num_colors, "Colors");
+	cusparseDestroyColorInfo(info);
+	cusparseDestroyMatDescr(descG);
+	cusparseDestroy(handle);
+    cudaFree(d_val_ptr);
     cudaFree(d_col_ptr);
-    cudaFree(d_tile_boundaries);
-    cudaFree(d_soa_total1);
-    cudaFree(d_soa_total2);
-    cudaFree(d_soa_max1);
-    cudaFree(d_soa_max2);
-    cudaFree(d_total1);
-    cudaFree(d_total2);
-    cudaFree(d_max1);
-    cudaFree(d_max2);
+    cudaFree(d_row_ptr);
 }
 
 
-NVBENCH_BENCH(copyBenchDist1);
-NVBENCH_BENCH(coloring1Bench);
-NVBENCH_BENCH(copyBenchDist2);
-NVBENCH_BENCH(coloring2Bench);
+
+using MyEnumList = nvbench::enum_type_list<1, 2, 4>;
+
+NVBENCH_BENCH_TYPES(Distance1, NVBENCH_TYPE_AXES(MyEnumList)).set_type_axes_names({"BLK_SM"});
+NVBENCH_BENCH_TYPES(Distance1Copy, NVBENCH_TYPE_AXES(MyEnumList)).set_type_axes_names({"BLK_SM"});
+NVBENCH_BENCH_TYPES(Distance2, NVBENCH_TYPE_AXES(MyEnumList)).set_type_axes_names({"BLK_SM"});
+NVBENCH_BENCH_TYPES(Distance2Bank, NVBENCH_TYPE_AXES(MyEnumList)).set_type_axes_names({"BLK_SM"});
+NVBENCH_BENCH_TYPES(Distance2Copy, NVBENCH_TYPE_AXES(MyEnumList)).set_type_axes_names({"BLK_SM"});
+NVBENCH_BENCH(Distance1cusparse);

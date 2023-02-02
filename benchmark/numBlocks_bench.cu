@@ -6,71 +6,61 @@
 
 using namespace apa22_coloring;
 static constexpr int MAX_THREADS_SM = 1024;  // Turing (2080ti)
-static constexpr const char* Mat = def::Mat3;
+static constexpr const char* Mat = def::CurlCurl_4;
+static constexpr const char* MAT_NAME = "CurlCurl_4";
 
 template <int BLK_SM>
 void Dist1(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring1Kernel<THREADS, BLK_SM, int>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D1, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring1Kernel<int, THREADS, BLK_SM>);
-  GPUSetupD1 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
   state.exec([&](nvbench::launch& launch) {
-    coloring1Kernel<int, THREADS, BLK_SM>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.d_total1,
+        gpu_setup.d_max1);
   });
 }
 
 template <int BLK_SM>
 void Dist2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring2Kernel<THREADS, BLK_SM, int>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D2, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring2Kernel<int, THREADS, BLK_SM>);
-  GPUSetupD2 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
   state.exec([&](nvbench::launch& launch) {
-    coloring2Kernel<int, THREADS, BLK_SM>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_soa_total2,
-            gpu_setup.d_soa_max2,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1,
-            gpu_setup.d_total2,
-            gpu_setup.d_max2);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.blocks_total2,
+        gpu_setup.blocks_max2, gpu_setup.d_total1, gpu_setup.d_max1,
+        gpu_setup.d_total2, gpu_setup.d_max2);
   });
 }
 

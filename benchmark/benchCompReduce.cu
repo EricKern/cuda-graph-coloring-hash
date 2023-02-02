@@ -1,518 +1,445 @@
-#include <nvbench/nvbench.cuh>
-#include <cub/cub.cuh>
-
-#include <defines.hpp>
-#include <setup.cuh>
 #include <coloring.cuh>
+#include <cub/cub.cuh>
+#include <defines.hpp>
+#include <nvbench/nvbench.cuh>
+#include <setup.cuh>
 
 #include "reduceCompKernels.cuh"
 
 using namespace apa22_coloring;
 static constexpr int MAX_THREADS_SM = 1024;  // Turing (2080ti)
-static constexpr const char* Mat = def::Mat3_Cluster;
+static constexpr const char* Mat = def::CurlCurl_4;
+static constexpr const char* MAT_NAME = "CurlCurl_4";
 
 template <int BLK_SM>
-void Dist1Ranking_Commutative(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+void Dist1Ranking_Commutative(nvbench::state& state,
+                              nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring1Kernel<THREADS, BLK_SM, int,
+                                cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D1, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring1Kernel<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>);
-  GPUSetupD1 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
   state.exec([&](nvbench::launch& launch) {
-    coloring1Kernel<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.d_total1,
+        gpu_setup.d_max1);
   });
 }
 
 template <int BLK_SM>
-void Dist1Ranking(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+void Dist1Ranking(nvbench::state& state,
+                  nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
-
+  auto kernel = coloring1Kernel<THREADS, BLK_SM, int, cub::BLOCK_REDUCE_RAKING>;
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D1, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring1Kernel<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_RAKING>);
-  GPUSetupD1 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
   state.exec([&](nvbench::launch& launch) {
-    coloring1Kernel<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_RAKING>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.d_total1,
+        gpu_setup.d_max1);
   });
 }
 
 template <int BLK_SM>
-void Dist1Warp(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+void Dist1Warp(nvbench::state& state,
+               nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring1Kernel<THREADS, BLK_SM, int>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D1, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring1Kernel<int, THREADS, BLK_SM>);
-  GPUSetupD1 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
   state.exec([&](nvbench::launch& launch) {
-    coloring1Kernel<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_WARP_REDUCTIONS>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.d_total1,
+        gpu_setup.d_max1);
   });
 }
 
 template <int BLK_SM>
-void Dist1Ranking_Commutative2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+void Dist1Ranking_Commutative2(nvbench::state& state,
+                               nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring1KernelDoubleTemp<THREADS, BLK_SM, int,
+                                cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D1, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring1KernelDoubleTemp<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>);
-  GPUSetupD1 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
-  state.exec([&](nvbench::launch& launch) {
-    coloring1KernelDoubleTemp<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1);
-  });
-}
-
-
-template <int BLK_SM>
-void Dist1Warp2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
-  constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
-
-  MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D1, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring1KernelDoubleTemp<int, THREADS, BLK_SM>);
-  GPUSetupD1 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
-
-  size_t shMem_bytes = tiling.tile_target_mem;
-  dim3 gridSize(tiling.n_tiles);
-  dim3 blockSize(THREADS);
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
 
   state.exec([&](nvbench::launch& launch) {
-    coloring1KernelDoubleTemp<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_WARP_REDUCTIONS>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.d_total1,
+        gpu_setup.d_max1);
   });
 }
 
 template <int BLK_SM>
-void Dist1CustomReduceWarp(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+void Dist1Warp2(nvbench::state& state,
+                nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring1KernelDoubleTemp<THREADS, BLK_SM, int>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D1, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring1KernelCustomReduce<int, THREADS, BLK_SM>);
-  GPUSetupD1 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
   state.exec([&](nvbench::launch& launch) {
-    coloring1KernelCustomReduce<int, THREADS, BLK_SM>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.d_total1,
+        gpu_setup.d_max1);
   });
 }
 
 template <int BLK_SM>
-void Dist1CustomReduceLast(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+void Dist1CustomReduceWarp(nvbench::state& state,
+                           nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring1KernelCustomReduce<THREADS, BLK_SM, int>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D1, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring1KernelCustomReduceLast<int, THREADS, BLK_SM>);
-  GPUSetupD1 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
   state.exec([&](nvbench::launch& launch) {
-    coloring1KernelCustomReduceLast<int, THREADS, BLK_SM>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.d_total1,
+        gpu_setup.d_max1);
   });
 }
 
 template <int BLK_SM>
-void Dist2Ranking_Commutative(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+void Dist1CustomReduceLast(nvbench::state& state,
+                           nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring1KernelCustomReduceLast<THREADS, BLK_SM, int>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D2, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring2Kernel<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>);
-  GPUSetupD2 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
   state.exec([&](nvbench::launch& launch) {
-    coloring2Kernel<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_soa_total2,
-            gpu_setup.d_soa_max2,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1,
-            gpu_setup.d_total2,
-            gpu_setup.d_max2);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.d_total1,
+        gpu_setup.d_max1);
   });
 }
 
 template <int BLK_SM>
-void Dist2Warp(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+void Dist2Ranking_Commutative(nvbench::state& state,
+                              nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring2Kernel<THREADS, BLK_SM, int,
+                                cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D2, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring2Kernel<int, THREADS, BLK_SM>);
-  GPUSetupD2 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
-  state.exec([&](nvbench::launch& launch) {
-    coloring2Kernel<int, THREADS, BLK_SM>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_soa_total2,
-            gpu_setup.d_soa_max2,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1,
-            gpu_setup.d_total2,
-            gpu_setup.d_max2);
-  });
-}
-
-
-template <int BLK_SM>
-void Dist2Ranking_Commutative2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
-  constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
-
-  MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D2, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring2Kernel2Temp<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>);
-  GPUSetupD2 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
-
-  size_t shMem_bytes = tiling.tile_target_mem;
-  dim3 gridSize(tiling.n_tiles);
-  dim3 blockSize(THREADS);
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
 
   state.exec([&](nvbench::launch& launch) {
-    coloring2Kernel2Temp<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_soa_total2,
-            gpu_setup.d_soa_max2,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1,
-            gpu_setup.d_total2,
-            gpu_setup.d_max2);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.blocks_total2,
+        gpu_setup.blocks_max2, gpu_setup.d_total1, gpu_setup.d_max1,
+        gpu_setup.d_total2, gpu_setup.d_max2);
   });
 }
 
 template <int BLK_SM>
-void Dist2Ranking_Commutative4(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+void Dist2Warp(nvbench::state& state,
+               nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring2Kernel<THREADS, BLK_SM, int>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D2, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring2Kernel4Temp<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>);
-  GPUSetupD2 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
   state.exec([&](nvbench::launch& launch) {
-    coloring2Kernel4Temp<int, THREADS, BLK_SM, cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_soa_total2,
-            gpu_setup.d_soa_max2,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1,
-            gpu_setup.d_total2,
-            gpu_setup.d_max2);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.blocks_total2,
+        gpu_setup.blocks_max2, gpu_setup.d_total1, gpu_setup.d_max1,
+        gpu_setup.d_total2, gpu_setup.d_max2);
   });
 }
 
 template <int BLK_SM>
-void Dist2Warp2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+void Dist2Ranking_Commutative2(nvbench::state& state,
+                               nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring2Kernel2Temp<THREADS, BLK_SM, int,
+                                     cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D2, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring2Kernel2Temp<int, THREADS, BLK_SM>);
-  GPUSetupD2 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
   state.exec([&](nvbench::launch& launch) {
-    coloring2Kernel2Temp<int, THREADS, BLK_SM>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_soa_total2,
-            gpu_setup.d_soa_max2,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1,
-            gpu_setup.d_total2,
-            gpu_setup.d_max2);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.blocks_total2,
+        gpu_setup.blocks_max2, gpu_setup.d_total1, gpu_setup.d_max1,
+        gpu_setup.d_total2, gpu_setup.d_max2);
   });
 }
 
 template <int BLK_SM>
-void Dist2Warp4(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+void Dist2Ranking_Commutative4(nvbench::state& state,
+                               nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring2Kernel4Temp<THREADS, BLK_SM, int,
+                                     cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D2, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring2Kernel4Temp<int, THREADS, BLK_SM>);
-  GPUSetupD2 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
   state.exec([&](nvbench::launch& launch) {
-    coloring2Kernel4Temp<int, THREADS, BLK_SM>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_soa_total2,
-            gpu_setup.d_soa_max2,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1,
-            gpu_setup.d_total2,
-            gpu_setup.d_max2);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.blocks_total2,
+        gpu_setup.blocks_max2, gpu_setup.d_total1, gpu_setup.d_max1,
+        gpu_setup.d_total2, gpu_setup.d_max2);
   });
 }
 
 template <int BLK_SM>
-void Dist2CustomReduce(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+void Dist2Warp2(nvbench::state& state,
+                nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring2Kernel2Temp<THREADS, BLK_SM, int>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D2, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring2KernelCustomReduce<int, THREADS, BLK_SM>);
-  GPUSetupD2 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
   state.exec([&](nvbench::launch& launch) {
-    coloring2KernelCustomReduce<int, THREADS, BLK_SM>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_soa_total2,
-            gpu_setup.d_soa_max2,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1,
-            gpu_setup.d_total2,
-            gpu_setup.d_max2);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.blocks_total2,
+        gpu_setup.blocks_max2, gpu_setup.d_total1, gpu_setup.d_max1,
+        gpu_setup.d_total2, gpu_setup.d_max2);
   });
 }
 
 template <int BLK_SM>
-void Dist2CustomReduceLast(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+void Dist2Warp4(nvbench::state& state,
+                nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring2Kernel4Temp<THREADS, BLK_SM, int>;
 
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D2, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
-                (void*)coloring2KernelCustomReduceLast<int, THREADS, BLK_SM>);
-  GPUSetupD2 gpu_setup(mat_loader.row_ptr,
-                       mat_loader.col_ptr,
-                       tiling.tile_boundaries.get(),
-                       tiling.n_tiles);
+  Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
   size_t shMem_bytes = tiling.tile_target_mem;
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
   state.exec([&](nvbench::launch& launch) {
-    coloring2KernelCustomReduceLast<int, THREADS, BLK_SM>
-        <<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-            gpu_setup.d_row_ptr,
-            gpu_setup.d_col_ptr,
-            gpu_setup.d_tile_boundaries,
-            tiling.tile_target_mem,
-            gpu_setup.d_soa_total1,
-            gpu_setup.d_soa_max1,
-            gpu_setup.d_soa_total2,
-            gpu_setup.d_soa_max2,
-            gpu_setup.d_total1,
-            gpu_setup.d_max1,
-            gpu_setup.d_total2,
-            gpu_setup.d_max2);
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.blocks_total2,
+        gpu_setup.blocks_max2, gpu_setup.d_total1, gpu_setup.d_max1,
+        gpu_setup.d_total2, gpu_setup.d_max2);
+  });
+}
+
+template <int BLK_SM>
+void Dist2CustomReduce(nvbench::state& state,
+                       nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+  constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring2KernelCustomReduce<THREADS, BLK_SM, int>;
+
+  MatLoader& mat_loader = MatLoader::getInstance(Mat);
+  Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
+
+  size_t shMem_bytes = tiling.tile_target_mem;
+  dim3 gridSize(tiling.n_tiles);
+  dim3 blockSize(THREADS);
+
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
+  state.exec([&](nvbench::launch& launch) {
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.blocks_total2,
+        gpu_setup.blocks_max2, gpu_setup.d_total1, gpu_setup.d_max1,
+        gpu_setup.d_total2, gpu_setup.d_max2);
+  });
+}
+
+template <int BLK_SM>
+void Dist2CustomReduceLast(nvbench::state& state,
+                           nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
+  constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring2KernelCustomReduceLast<THREADS, BLK_SM, int>;
+
+  MatLoader& mat_loader = MatLoader::getInstance(Mat);
+  Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel));
+  GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
+
+  size_t shMem_bytes = tiling.tile_target_mem;
+  dim3 gridSize(tiling.n_tiles);
+  dim3 blockSize(THREADS);
+
+  state.add_element_count(0, MAT_NAME);
+  state.add_element_count(mat_loader.m_rows, "Rows");
+  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+
+  state.exec([&](nvbench::launch& launch) {
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        gpu_setup.blocks_total1, gpu_setup.blocks_max1, gpu_setup.blocks_total2,
+        gpu_setup.blocks_max2, gpu_setup.d_total1, gpu_setup.d_max1,
+        gpu_setup.d_total2, gpu_setup.d_max2);
   });
 }
 
