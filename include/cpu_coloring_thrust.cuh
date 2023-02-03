@@ -1,13 +1,13 @@
 #pragma once
-#include <cpu_brev.hpp>
-#include <hash.cuh>
-#include <coloringCounters.cuh>
-
 #include <thrust/reduce.h>        // reduce and reduce_by_key
 #include <thrust/functional.h>    // thrust::maximum
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+
+#include "cpu_brev.hpp"
+#include "hash.cuh"
+#include "coloring_counters.cuh"
 
 namespace apa22_coloring
 {

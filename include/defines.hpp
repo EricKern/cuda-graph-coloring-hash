@@ -1,5 +1,5 @@
 #pragma once
-
+#include <unordered_map>
 namespace def {
 static constexpr const char* Mat0 =
     "/home/eric/Documents/graph-coloring/cage3.mtx";
@@ -47,25 +47,39 @@ static constexpr const char* ML_Geer =
     "/mnt/matrix_store/MM/Janna/ML_Geer/ML_Geer.mtx";
 
 
-const char* choseMat(int mat_nr) {
-  const char* return_mat;
-  switch (mat_nr) {
-    case 0:
-      return_mat = def::Mat0;
-      break;
-    case 1:
-      return_mat = def::Mat1;
-      break;
-    case 2:
-      return_mat = def::Mat2;
-      break;
-    case 3:
-      return_mat = def::Mat3;
-      break;
+std::unordered_map<std::string, const char*> map = {
+    {"CurlCurl_0", CurlCurl_0},
+    {"CurlCurl_4", CurlCurl_4},
+    {"atmosmodd", atmosmodd},
+    {"atmosmodd", atmosmodj},
+    {"atmosmodl", atmosmodl},
+    {"atmosmodm", atmosmodm},
+    {"af_shell3", af_shell3},
+    {"af_shell4", af_shell4},
+    {"af_shell7", af_shell7},
+    {"af_shell8", af_shell8},
+    {"Cube_Coup_dt0", Cube_Coup_dt0},
+    {"ML_Geer", ML_Geer}
+};
+// const char* choseMat(const char* mat_nr) {
+//   const char* return_mat;
+//   switch (mat_nr) {
+//     case strcmp(:
+//       return_mat = def::Mat0;
+//       break;
+//     case 1:
+//       return_mat = def::Mat1;
+//       break;
+//     case 2:
+//       return_mat = def::Mat2;
+//       break;
+//     case 3:
+//       return_mat = def::Mat3;
+//       break;
 
-    default:
-      return_mat = def::Mat2;
-  }
-  return return_mat;
-}
+//     default:
+//       return_mat = def::Mat2;
+//   }
+//   return return_mat;
+// }
 }  // namespace def

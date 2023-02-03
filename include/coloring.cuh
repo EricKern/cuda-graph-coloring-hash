@@ -7,10 +7,10 @@
 #include <thrust/execution_policy.h>
 #include <cub/cub.cuh>
 
-#include <hash.cuh>
-#include <coloringCounters.cuh>
-#include <odd_even_sort.hpp>
-#include <util.cuh>
+#include "hash.cuh"
+#include "coloring_counters.cuh"
+#include "odd_even_sort.hpp"
+#include "util.cuh"
 
 
 namespace apa22_coloring {
@@ -127,8 +127,8 @@ void D1LastReduction(CountT* blocks_res, Counters* out_counters, ReductionOp op,
   // local results to at most blockDim.x
 
   // Last block reduction
-  #pragma unroll hash_params.len
-  for (int k = 0; k < hash_params.len; ++k) {
+  #pragma unroll num_hashes
+  for (int k = 0; k < num_hashes; ++k) {
     #pragma unroll num_bit_widths
     for (int i = 0; i < num_bit_widths; ++i) {
       int hash_offset = k * elem_p_hash_fn;
@@ -174,12 +174,12 @@ void coloring1Kernel(IndexT* row_ptr,
   typedef cub::BlockReduce<CountT, THREADS, RED_ALGO> BlockReduceT;
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
-  #pragma unroll hash_params.len
-  for (int k = 0; k < hash_params.len; ++k) {
+  #pragma unroll num_hashes
+  for (int k = 0; k < num_hashes; ++k) {
     // thread local array to count collisions
     Counters total_collisions;
     Counters max_collisions;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total_collisions, max_collisions);
 
     #pragma unroll num_bit_widths
@@ -362,14 +362,14 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
   typedef cub::BlockReduce<CountT, THREADS, RED_ALGO> BlockReduceT;
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
-  #pragma unroll hash_params.len
-  for (int k = 0; k < hash_params.len; ++k) {
+  #pragma unroll num_hashes
+  for (int k = 0; k < num_hashes; ++k) {
     // Counters total1, max1;
     Counters total2, max2;
-    // D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    // D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
     //                   total1, max1);
     D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
-                      hash_params.val[k], total2, max2);
+                      start_hash + k, total2, max2);
     #pragma unroll num_bit_widths
     for (int i = 0; i < num_bit_widths; ++i) {
       // CountT l1_sum1 = BlockReduceT(temp_storage)
@@ -568,14 +568,14 @@ void coloring2KernelBank(IndexT* row_ptr,  // global mem
   typedef cub::BlockReduce<CountT, THREADS, RED_ALGO> BlockReduceT;
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
-  #pragma unroll hash_params.len
-  for (int k = 0; k < hash_params.len; ++k) {
+  #pragma unroll num_hashes
+  for (int k = 0; k < num_hashes; ++k) {
     // Counters total1, max1;
     Counters total2, max2;
-    // D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    // D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
     //                   total1, max1);
     D2CollisionsLocalBank(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
-                          max_node_degree, hash_params.val[k], total2, max2);
+                          max_node_degree, start_hash + k, total2, max2);
     #pragma unroll num_bit_widths
     for (int i = 0; i < num_bit_widths; ++i) {
       // CountT l1_sum1 = BlockReduceT(temp_storage)

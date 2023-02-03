@@ -1,8 +1,9 @@
 #pragma once
-#include <coloringCounters.cuh>
-#include <cpu_brev.hpp>
-#include <hash.cuh>
 #include <algorithm>  // for std::sort
+
+#include "coloring_counters.cuh"
+#include "cpu_brev.hpp"
+#include "hash.cuh"
 
 namespace apa22_coloring {
 

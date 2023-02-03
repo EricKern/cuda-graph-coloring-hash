@@ -1,7 +1,7 @@
 #include <cub/cub.cuh>
 
 #include "coloring.cuh"
-#include "coloringCounters.cuh"
+#include "coloring_counters.cuh"
 
 using namespace apa22_coloring;
 
@@ -40,7 +40,7 @@ void D1LastReduction2(Counters::value_type* block_res, Counters* out_counters, R
   // local results to at most blockDim.x
 
   // Last block reduction
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     int* start_addr[num_bit_widths];
     int hash_offset = k * elem_p_hash_fn;
     Accu accu{};
@@ -87,11 +87,11 @@ void coloring1KernelDoubleTemp(IndexT* row_ptr,
   __shared__ typename BlockReduceT::TempStorage temp_storage1;
   __shared__ typename BlockReduceT::TempStorage temp_storage2;
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     // thread local array to count collisions
     Counters total_collisions;
     Counters max_collisions;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total_collisions, max_collisions);
 
     for (int i = 0; i < num_bit_widths; ++i) {
@@ -183,13 +183,13 @@ void coloring2Kernel2Temp(IndexT* row_ptr,  // global mem
   __shared__ typename BlockReduceT::TempStorage temp_storage2;
 
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     Counters total1, max1;
     Counters total2, max2;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total1, max1);
     D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
-                      hash_params.val[k], total2, max2);
+                      start_hash + k, total2, max2);
     for (int i = 0; i < num_bit_widths; ++i) {
       int l1_sum1 = BlockReduceT(temp_storage1)
                        .Reduce(total1.m[i], cub::Sum{}, n_tileNodes);
@@ -292,13 +292,13 @@ void coloring2Kernel4Temp(IndexT* row_ptr,  // global mem
   __shared__ typename BlockReduceT::TempStorage temp_storage4;
 
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     Counters total1, max1;
     Counters total2, max2;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total1, max1);
     D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
-                      hash_params.val[k], total2, max2);
+                      start_hash + k, total2, max2);
     for (int i = 0; i < num_bit_widths; ++i) {
       int l1_sum1 = BlockReduceT(temp_storage1)
                        .Reduce(total1.m[i], cub::Sum{}, n_tileNodes);
@@ -382,11 +382,11 @@ void coloring1KernelCustomReduce(IndexT* row_ptr,
   typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceTLast;
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     // thread local array to count collisions
     Counters total_collisions;
     Counters max_collisions;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total_collisions, max_collisions);
 
     auto l1_sum = BlockReduceT(temp_storage)
@@ -463,11 +463,11 @@ void coloring1KernelCustomReduceLast(IndexT* row_ptr,
   typedef cub::BlockReduce<Accu, THREADS, RED_ALGO> BlockReduceTLast;
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     // thread local array to count collisions
     Counters total_collisions;
     Counters max_collisions;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total_collisions, max_collisions);
 
     auto l1_sum = BlockReduceT(temp_storage)
@@ -559,13 +559,13 @@ void coloring2KernelCustomReduce(IndexT* row_ptr,  // global mem
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     Counters total1, max1;
     Counters total2, max2;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total1, max1);
     D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
-                      hash_params.val[k], total2, max2);
+                      start_hash + k, total2, max2);
     auto l1_sum1 = BlockReduceT(temp_storage)
                      .Reduce(total1, Sum_Counters(), n_tileNodes);
     cg::this_thread_block().sync();
@@ -667,13 +667,13 @@ void coloring2KernelCustomReduceLast(IndexT* row_ptr,  // global mem
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     Counters total1, max1;
     Counters total2, max2;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total1, max1);
     D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
-                      hash_params.val[k], total2, max2);
+                      start_hash + k, total2, max2);
     auto l1_sum1 = BlockReduceT(temp_storage)
                      .Reduce(total1, Sum_Counters(), n_tileNodes);
     cg::this_thread_block().sync();

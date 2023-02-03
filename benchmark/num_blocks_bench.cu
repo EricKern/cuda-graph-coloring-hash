@@ -1,20 +1,20 @@
 #include <nvbench/nvbench.cuh>
 
-#include <defines.hpp>
-#include <setup.cuh>
-#include <coloring.cuh>
+#include "defines.hpp"
+#include "setup.cuh"
+#include "coloring.cuh"
+#include "mat_loader.hpp"
+#include "bench_util.cuh"
 
 using namespace apa22_coloring;
 static constexpr int MAX_THREADS_SM = 1024;  // Turing (2080ti)
-static constexpr const char* Mat = def::CurlCurl_4;
-static constexpr const char* MAT_NAME = "CurlCurl_4";
 
 template <int BLK_SM>
 void Dist1(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
   auto kernel = coloring1Kernel<THREADS, BLK_SM, int>;
 
-  MatLoader& mat_loader = MatLoader::getInstance(Mat);
+  MatLoader& mat_loader = MatLoader::getInstance();
   Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
                 reinterpret_cast<void*>(kernel));
   GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
@@ -24,9 +24,7 @@ void Dist1(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
-  state.add_element_count(0, MAT_NAME);
-  state.add_element_count(mat_loader.m_rows, "Rows");
-  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+  add_MatInfo(state);
 
   state.exec([&](nvbench::launch& launch) {
     kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
@@ -41,7 +39,7 @@ void Dist2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>
   constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
   auto kernel = coloring2Kernel<THREADS, BLK_SM, int>;
 
-  MatLoader& mat_loader = MatLoader::getInstance(Mat);
+  MatLoader& mat_loader = MatLoader::getInstance();
   Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
                 reinterpret_cast<void*>(kernel));
   GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
@@ -51,9 +49,7 @@ void Dist2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>
   dim3 gridSize(tiling.n_tiles);
   dim3 blockSize(THREADS);
 
-  state.add_element_count(0, MAT_NAME);
-  state.add_element_count(mat_loader.m_rows, "Rows");
-  state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+  add_MatInfo(state);
 
   state.exec([&](nvbench::launch& launch) {
     kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(

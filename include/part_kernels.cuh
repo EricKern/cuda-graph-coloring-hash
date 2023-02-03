@@ -1,6 +1,6 @@
 #pragma once
+#include "coloring.cuh"
 
-#include <coloring.cuh>
 
 using namespace apa22_coloring;
 
@@ -49,11 +49,11 @@ void coloring1OnlyHash(IndexT* row_ptr,
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     // thread local array to count collisions
     Counters total_collisions;
     Counters max_collisions;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total_collisions, max_collisions);
 
     for (int i = 0; i < num_bit_widths; ++i) {
@@ -92,11 +92,11 @@ void coloring1HashWrite(IndexT* row_ptr,
   
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     // thread local array to count collisions
     Counters total_collisions;
     Counters max_collisions;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total_collisions, max_collisions);
 
     for (int i = 0; i < num_bit_widths; ++i) {
@@ -142,11 +142,11 @@ void coloring1FirstReduce(IndexT* row_ptr,
   typedef cub::BlockReduce<int, THREADS, RED_ALGO> BlockReduceT;
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     // thread local array to count collisions
     Counters total_collisions;
     Counters max_collisions;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total_collisions, max_collisions);
 
     for (int i = 0; i < num_bit_widths; ++i) {
@@ -240,9 +240,9 @@ void coloring2OnlyHashD1(IndexT* row_ptr,  // global mem
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
 
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     Counters total1, max1;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total1, max1);
   }
 }
@@ -283,10 +283,10 @@ void coloring2OnlyHashD2(IndexT* row_ptr,  // global mem
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     Counters total2, max2;
     D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
-                      hash_params.val[k], total2, max2);
+                      start_hash + k, total2, max2);
   }
 }
 
@@ -326,13 +326,13 @@ void coloring2OnlyHash(IndexT* row_ptr,  // global mem
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     Counters total1, max1;
     Counters total2, max2;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total1, max1);
     D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
-                      hash_params.val[k], total2, max2);
+                      start_hash + k, total2, max2);
   }
 }
 
@@ -373,13 +373,13 @@ void coloring2HashWrite(IndexT* row_ptr,  // global mem
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     Counters total1, max1;
     Counters total2, max2;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total1, max1);
     D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
-                      hash_params.val[k], total2, max2);
+                      start_hash + k, total2, max2);
     for (int i = 0; i < num_bit_widths; ++i) {
         const int elem_p_hash_fn = num_bit_widths * gridDim.x;
         //        hash segment         bit_w segment   block value
@@ -429,13 +429,13 @@ void coloring2FirstRed(IndexT* row_ptr,  // global mem
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
 
-  for (int k = 0; k < hash_params.len; ++k) {
+  for (int k = 0; k < num_hashes; ++k) {
     Counters total1, max1;
     Counters total2, max2;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, hash_params.val[k],
+    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
                       total1, max1);
     D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
-                      hash_params.val[k], total2, max2);
+                      start_hash + k, total2, max2);
     for (int i = 0; i < num_bit_widths; ++i) {
       int l1_sum1 = BlockReduceT(temp_storage)
                        .Reduce(total1.m[i], cub::Sum{}, n_tileNodes);

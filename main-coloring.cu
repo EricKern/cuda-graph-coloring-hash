@@ -1,21 +1,19 @@
-#include <cli_parser.hpp>
-#include <cpumultiply.hpp>  //! header file for tiling
-#include <tiling.hpp>       //! header file for tiling
-#include <coloring.cuh>
-#include <setup.cuh>
-
 #include <cstdio>
 #include <memory>
 #include <numeric>
 // #include <thrust/host_vector.h>
 // #include <thrust/device_vector.h>
-#include <asc.cuh>
 
-#include <defines.hpp>
+#include "cli_parser.hpp"
+#include "mat_loader.hpp"
+#include "coloring.cuh"
+#include "setup.cuh"
+#include "asc.cuh"
+#include "defines.hpp"
 // #include <kernel_setup.hpp>
-#include <coloringCounters.cuh>
+#include "coloring_counters.cuh"
+#include "cpu_coloring.hpp"
 
-#include <cpu_coloring.hpp>
 
 #define DIST2 1
 
@@ -40,9 +38,19 @@ int main(int argc, char const *argv[]) {
   constexpr int BLK_SM = 2;
   constexpr int THREADS = MAX_THREADS_SM/BLK_SM;
 
-  int mat_nr = 2;          //Default value
-  chCommandLineGet<int>(&mat_nr, "m", argc, argv);
-  auto Mat = def::CurlCurl_4;
+  const char* mat_input = NULL;          //Default value
+  chCommandLineGet<const char*>(&mat_input, "mat", argc, argv);
+  // auto Mat = def::CurlCurl_4;
+  std::string mat_in_str(mat_input);
+  const char* Mat;
+  if (auto search = def::map.find(mat_in_str); search != def::map.end()){
+    std::cout << "Found " << search->first << " " << search->second << '\n';
+    Mat = search->second;
+  }
+  else {
+      std::cout << "Not found\n";
+      Mat = mat_input;
+  }
 
   #if DIST2
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
@@ -126,21 +134,21 @@ int main(int argc, char const *argv[]) {
   //====================================
   // Allocate memory for results on host
   //====================================
-  auto total1 = std::make_unique<Counters[]>(hash_params.len);
-  auto max1 = std::make_unique<Counters[]>(hash_params.len);
-  cudaMemcpy(total1.get(), gpu_setup.d_total1, hash_params.len * sizeof(Counters),
+  auto total1 = std::make_unique<Counters[]>(num_hashes);
+  auto max1 = std::make_unique<Counters[]>(num_hashes);
+  cudaMemcpy(total1.get(), gpu_setup.d_total1, num_hashes * sizeof(Counters),
              cudaMemcpyDeviceToHost);
-  cudaMemcpy(max1.get(), gpu_setup.d_max1, hash_params.len * sizeof(Counters),
+  cudaMemcpy(max1.get(), gpu_setup.d_max1, num_hashes * sizeof(Counters),
              cudaMemcpyDeviceToHost);
   std::printf("Dist 1\n");
   printResult(total1[0], max1[0]);
 
 #if DIST2
-  auto total2 = std::make_unique<Counters[]>(hash_params.len);
-  auto max2 = std::make_unique<Counters[]>(hash_params.len);
-  cudaMemcpy(total2.get(), gpu_setup.d_total2, hash_params.len * sizeof(Counters),
+  auto total2 = std::make_unique<Counters[]>(num_hashes);
+  auto max2 = std::make_unique<Counters[]>(num_hashes);
+  cudaMemcpy(total2.get(), gpu_setup.d_total2, num_hashes * sizeof(Counters),
             cudaMemcpyDeviceToHost);
-  cudaMemcpy(max2.get(), gpu_setup.d_max2, hash_params.len * sizeof(Counters),
+  cudaMemcpy(max2.get(), gpu_setup.d_max2, num_hashes * sizeof(Counters),
             cudaMemcpyDeviceToHost);
   std::printf("Dist 2\n");
   printResult(total2[0], max2[0]);
@@ -148,14 +156,14 @@ int main(int argc, char const *argv[]) {
 
   Counters cpu_max1, cpu_total1;
   cpu_dist1(mat_loader.row_ptr, mat_loader.col_ptr, mat_loader.m_rows,
-            hash_params.val[0], &cpu_total1, &cpu_max1);
+            start_hash, &cpu_total1, &cpu_max1);
   std::printf("CPU dist 1 results\n");
   printResult(cpu_total1, cpu_max1);
 
 #if DIST2
     Counters cpu_max2, cpu_total2;
     cpuDist2(mat_loader.row_ptr, mat_loader.col_ptr, mat_loader.m_rows,
-             tiling.max_node_degree, hash_params.val[0], &cpu_total2, &cpu_max2);
+             tiling.max_node_degree, start_hash, &cpu_total2, &cpu_max2);
 
     std::printf("CPU dist 2 results\n");
     printResult(cpu_total2, cpu_max2);

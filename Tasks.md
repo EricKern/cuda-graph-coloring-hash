@@ -75,3 +75,10 @@ Shared memory für dist2 mit sorting network braucht genaue größe der partitio
 - timing vergleichen mit altem projekt und cusparse
 - padding mit cub max value
 - profile dist1 mit 2 blöcken
+
+# 3.02
+- Result plots vergleich zwischen versionen
+- Bandwidth in Benchmark einbauen
+- Basic versionen benchmarken
+- plotscript für naive versionen
+- Cooperative Launch

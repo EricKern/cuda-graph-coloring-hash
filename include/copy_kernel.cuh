@@ -1,6 +1,6 @@
 #pragma once
 #include "coloring.cuh"
-#include "coloringCounters.cuh"
+#include "coloring_counters.cuh"
 
 using namespace apa22_coloring;
 
@@ -27,7 +27,7 @@ void copyKernelDist1(IndexT* row_ptr,  // global mem
     Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
 
     // local collisions
-    for (int k = 0; k < hash_params.len; k++){
+    for (int k = 0; k < num_hashes; k++){
         for (int i = 0; i < num_bit_widths; i++){
             if (threadIdx.x == 0){
                 const int elem_p_hash_fn = num_bit_widths * gridDim.x;
@@ -45,7 +45,7 @@ void copyKernelDist1(IndexT* row_ptr,  // global mem
     // final reduction of last block
     if (blockIdx.x == 0) {
         // total collisions
-        for (int k = 0; k < hash_params.len; k++){
+        for (int k = 0; k < num_hashes; k++){
             for (int i = 0; i < num_bit_widths; i++){
                 int hash_offset = k * elem_p_hash_fn;
                 int* start_addr = blocks_total1 + hash_offset + i * gridDim.x;
@@ -60,7 +60,7 @@ void copyKernelDist1(IndexT* row_ptr,  // global mem
         }
 
         // max collisions
-        for (int k = 0; k < hash_params.len; k++){
+        for (int k = 0; k < num_hashes; k++){
             for (int i = 0; i < num_bit_widths; i++){
                 int hash_offset = k * elem_p_hash_fn;
                 int* start_addr = blocks_max1 + hash_offset + i * gridDim.x;
@@ -107,7 +107,7 @@ void copyKernelDist2(IndexT* row_ptr,  // global mem
   
     Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries); 
 
-    for (int k = 0; k < hash_params.len; k++){
+    for (int k = 0; k < num_hashes; k++){
         for (int i = 0; i < num_bit_widths; i++){
             if (threadIdx.x == 0){
                 const int elem_p_hash_fn = num_bit_widths * gridDim.x;
@@ -125,7 +125,7 @@ void copyKernelDist2(IndexT* row_ptr,  // global mem
     const int elem_p_hash_fn = num_bit_widths * gridDim.x;
 
     if (blockIdx.x == 0) {
-        for (int k = 0; k < hash_params.len; k++){
+        for (int k = 0; k < num_hashes; k++){
             for (int i = 0; i < num_bit_widths; i++){
                 int hash_offset = k * elem_p_hash_fn;
                 int* start_addr = blocks_total1 + hash_offset + i * gridDim.x;
@@ -139,7 +139,7 @@ void copyKernelDist2(IndexT* row_ptr,  // global mem
             }
         }
 
-        for (int k = 0; k < hash_params.len; k++){
+        for (int k = 0; k < num_hashes; k++){
             for (int i = 0; i < num_bit_widths; i++){
                 int hash_offset = k * elem_p_hash_fn;
                 int* start_addr = blocks_max1 + hash_offset + i * gridDim.x;
@@ -153,7 +153,7 @@ void copyKernelDist2(IndexT* row_ptr,  // global mem
             }
         }
         
-        for (int k = 0; k < hash_params.len; k++){
+        for (int k = 0; k < num_hashes; k++){
             for (int i = 0; i < num_bit_widths; i++){
                 int hash_offset = k * elem_p_hash_fn;
                 int* start_addr = blocks_total2 + hash_offset + i * gridDim.x;
@@ -167,7 +167,7 @@ void copyKernelDist2(IndexT* row_ptr,  // global mem
             }
         }
 
-        for (int k = 0; k < hash_params.len; k++){
+        for (int k = 0; k < num_hashes; k++){
             for (int i = 0; i < num_bit_widths; i++){
                 int hash_offset = k * elem_p_hash_fn;
                 int* start_addr = blocks_max2 + hash_offset + i * gridDim.x;

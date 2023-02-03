@@ -4,40 +4,41 @@
 
 #include "coloring.cuh"
 #include "defines.hpp"
-#include "coloringCounters.cuh"
-#include "copyKernel.cuh"
+#include "coloring_counters.cuh"
+#include "copy_kernel.cuh"
 #include "setup.cuh"
+#include "mat_loader.hpp"
+#include "cli_bench.cu"
+#include "bench_util.cuh"
 
-static constexpr const char* Mat = def::CurlCurl_4;;
-static constexpr const char* MAT_NAME = "CurlCurl_4";
-static constexpr int MAX_THREADS_SM = 1024;  // Turing (2080ti)
+using BLOCKS_SM = nvbench::enum_type_list<1, 2>;
+using THREADS_SM = nvbench::enum_type_list<640, 768, 896, 1024>;
+static constexpr const char* SM_ShMem_key = "SM_ShMem";
+std::vector<nvbench::int64_t> SM_ShMem_range = {-1};
 
 using namespace apa22_coloring;
 
-template <int BLK_SM>
-void Distance1(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
-    constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
-    auto kernel = coloring1Kernel<THREADS, BLK_SM, int>;
+template <int MAX_THREADS_SM, int BLK_SM>
+void Distance1(nvbench::state& state,
+               nvbench::type_list<nvbench::enum_type<MAX_THREADS_SM>,
+                                  nvbench::enum_type<BLK_SM>>) {
+  constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring1Kernel<THREADS, BLK_SM, int>;
 
-    MatLoader& mat_loader = MatLoader::getInstance(Mat);
-    Tiling tiling(D1, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
+  MatLoader& mat_loader = MatLoader::getInstance();
+  Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
                 reinterpret_cast<void*>(kernel));
-    GPUSetupD1 gpu_setup(mat_loader.row_ptr,
-                        mat_loader.col_ptr,
-                        tiling.tile_boundaries.get(),
-                        tiling.n_tiles);
+  GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
-    size_t shMem_bytes = tiling.tile_target_mem;
-    dim3 gridSize(tiling.n_tiles);
-    dim3 blockSize(THREADS);
+  size_t shMem_bytes = tiling.tile_target_mem;
+  dim3 gridSize(tiling.n_tiles);
+  dim3 blockSize(THREADS);
 
-    state.add_element_count(0, MAT_NAME);
-    state.add_element_count(mat_loader.m_rows, "Rows");
-    state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+  add_MatInfo(state);
 
-    state.exec([&](nvbench::launch& launch) {
+  state.exec(
+      [&](nvbench::launch& launch) {
         kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
             gpu_setup.d_row_ptr,
             gpu_setup.d_col_ptr,
@@ -46,33 +47,30 @@ void Distance1(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_
             gpu_setup.blocks_max1,
             gpu_setup.d_total1,
             gpu_setup.d_max1);
-    });
+      });
 }
 
-template <int BLK_SM>
-void Distance1Copy(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
-    constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
-    auto kernel = copyKernelDist1<THREADS, BLK_SM, int>;
+template <int MAX_THREADS_SM, int BLK_SM>
+void Distance1Copy(nvbench::state& state,
+                   nvbench::type_list<nvbench::enum_type<MAX_THREADS_SM>,
+                                      nvbench::enum_type<BLK_SM>>) {
+  constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = copyKernelDist1<THREADS, BLK_SM, int>;
 
-    MatLoader& mat_loader = MatLoader::getInstance(Mat);
-    Tiling tiling(D1, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
+  MatLoader& mat_loader = MatLoader::getInstance();
+  Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
                 reinterpret_cast<void*>(kernel));
-    GPUSetupD1 gpu_setup(mat_loader.row_ptr,
-                        mat_loader.col_ptr,
-                        tiling.tile_boundaries.get(),
-                        tiling.n_tiles);
+  GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
-    size_t shMem_bytes = tiling.tile_target_mem;
-    dim3 gridSize(tiling.n_tiles);
-    dim3 blockSize(THREADS);
+  size_t shMem_bytes = tiling.tile_target_mem;
+  dim3 gridSize(tiling.n_tiles);
+  dim3 blockSize(THREADS);
 
-    state.add_element_count(0, MAT_NAME);
-    state.add_element_count(mat_loader.m_rows, "Rows");
-    state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+  add_MatInfo(state);
 
-    state.exec([&](nvbench::launch& launch) {
+  state.exec(
+      [&](nvbench::launch& launch) {
         kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
             gpu_setup.d_row_ptr,
             gpu_setup.d_col_ptr,
@@ -81,33 +79,30 @@ void Distance1Copy(nvbench::state &state, nvbench::type_list<nvbench::enum_type<
             gpu_setup.blocks_max1,
             gpu_setup.d_total1,
             gpu_setup.d_max1);
-    });
+      });
 }
 
-template <int BLK_SM>
-void Distance2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
-    constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
-    auto kernel = coloring2Kernel<THREADS, BLK_SM, int>;
+template <int MAX_THREADS_SM, int BLK_SM>
+void Distance2(nvbench::state& state,
+               nvbench::type_list<nvbench::enum_type<MAX_THREADS_SM>,
+                                  nvbench::enum_type<BLK_SM>>) {
+  constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring2Kernel<THREADS, BLK_SM, int>;
 
-    MatLoader& mat_loader = MatLoader::getInstance(Mat);
-    Tiling tiling(D2, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
+  MatLoader& mat_loader = MatLoader::getInstance();
+  Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
                 reinterpret_cast<void*>(kernel));
-    GPUSetupD2 gpu_setup(mat_loader.row_ptr,
-                        mat_loader.col_ptr,
-                        tiling.tile_boundaries.get(),
-                        tiling.n_tiles);
+  GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
-    size_t shMem_bytes = tiling.tile_target_mem;
-    dim3 gridSize(tiling.n_tiles);
-    dim3 blockSize(THREADS);
+  size_t shMem_bytes = tiling.tile_target_mem;
+  dim3 gridSize(tiling.n_tiles);
+  dim3 blockSize(THREADS);
 
-    state.add_element_count(0, MAT_NAME);
-    state.add_element_count(mat_loader.m_rows, "Rows");
-    state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+  add_MatInfo(state);
 
-    state.exec([&](nvbench::launch& launch) {
+  state.exec(
+      [&](nvbench::launch& launch) {
         kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
                 gpu_setup.d_row_ptr,
                 gpu_setup.d_col_ptr,
@@ -120,73 +115,58 @@ void Distance2(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_
                 gpu_setup.d_max1,
                 gpu_setup.d_total2,
                 gpu_setup.d_max2);
-    });
+      });
 }
 
-template <int BLK_SM>
-void Distance2Bank(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
-    constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
-    auto kernel = coloring2KernelBank<THREADS, BLK_SM, int>;
+template <int MAX_THREADS_SM, int BLK_SM>
+void Distance2Bank(nvbench::state& state,
+                   nvbench::type_list<nvbench::enum_type<MAX_THREADS_SM>,
+                                      nvbench::enum_type<BLK_SM>>) {
+  constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = coloring2KernelBank<THREADS, BLK_SM, int>;
 
-    MatLoader& mat_loader = MatLoader::getInstance(Mat);
-    Tiling tiling(D2_SortNet, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
+  MatLoader& mat_loader = MatLoader::getInstance();
+  Tiling tiling(D2_SortNet, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
                 reinterpret_cast<void*>(kernel));
-    GPUSetupD2 gpu_setup(mat_loader.row_ptr,
-                        mat_loader.col_ptr,
-                        tiling.tile_boundaries.get(),
-                        tiling.n_tiles);
+  GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
-    size_t shMem_bytes = tiling.tile_target_mem;
-    dim3 gridSize(tiling.n_tiles);
-    dim3 blockSize(THREADS);
+  size_t shMem_bytes = tiling.tile_target_mem;
+  dim3 gridSize(tiling.n_tiles);
+  dim3 blockSize(THREADS);
 
-    state.add_element_count(0, MAT_NAME);
-    state.add_element_count(mat_loader.m_rows, "Rows");
-    state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+  add_MatInfo(state);
 
-    state.exec([&](nvbench::launch& launch) {
-        kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
-                gpu_setup.d_row_ptr,
-                gpu_setup.d_col_ptr,
-                gpu_setup.d_tile_boundaries,
-                tiling.max_node_degree,
-                gpu_setup.blocks_total1,
-                gpu_setup.blocks_max1,
-                gpu_setup.blocks_total2,
-                gpu_setup.blocks_max2,
-                gpu_setup.d_total1,
-                gpu_setup.d_max1,
-                gpu_setup.d_total2,
-                gpu_setup.d_max2);
-    });
+  state.exec([&](nvbench::launch& launch) {
+    kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+        gpu_setup.d_row_ptr, gpu_setup.d_col_ptr, gpu_setup.d_tile_boundaries,
+        tiling.max_node_degree, gpu_setup.blocks_total1, gpu_setup.blocks_max1,
+        gpu_setup.blocks_total2, gpu_setup.blocks_max2, gpu_setup.d_total1,
+        gpu_setup.d_max1, gpu_setup.d_total2, gpu_setup.d_max2);
+  });
 }
 
-template <int BLK_SM>
-void Distance2Copy(nvbench::state &state, nvbench::type_list<nvbench::enum_type<BLK_SM>>) {
-    constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
-    auto kernel = copyKernelDist2<THREADS, BLK_SM, int>;
+template <int MAX_THREADS_SM, int BLK_SM>
+void Distance2Copy(nvbench::state& state,
+                   nvbench::type_list<nvbench::enum_type<MAX_THREADS_SM>,
+                                      nvbench::enum_type<BLK_SM>>) {
+  constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = copyKernelDist2<THREADS, BLK_SM, int>;
 
-    MatLoader& mat_loader = MatLoader::getInstance(Mat);
-    Tiling tiling(D2, BLK_SM,
-                mat_loader.row_ptr,
-                mat_loader.m_rows,
+  MatLoader& mat_loader = MatLoader::getInstance();
+  Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
                 reinterpret_cast<void*>(kernel));
-    GPUSetupD2 gpu_setup(mat_loader.row_ptr,
-                        mat_loader.col_ptr,
-                        tiling.tile_boundaries.get(),
-                        tiling.n_tiles);
-        
-    size_t shMem_bytes = tiling.tile_target_mem;
-    dim3 gridSize(tiling.n_tiles);
-    dim3 blockSize(THREADS);
+  GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
 
-    state.add_element_count(0, MAT_NAME);
-    state.add_element_count(mat_loader.m_rows, "Rows");
-    state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+  size_t shMem_bytes = tiling.tile_target_mem;
+  dim3 gridSize(tiling.n_tiles);
+  dim3 blockSize(THREADS);
 
-    state.exec([&](nvbench::launch& launch) {
+  add_MatInfo(state);
+
+  state.exec(
+      [&](nvbench::launch& launch) {
         kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
                 gpu_setup.d_row_ptr,
                 gpu_setup.d_col_ptr,
@@ -199,7 +179,7 @@ void Distance2Copy(nvbench::state &state, nvbench::type_list<nvbench::enum_type<
                 gpu_setup.d_max1,
                 gpu_setup.d_total2,
                 gpu_setup.d_max2);
-    });
+      });
 }
 
 void Distance1cusparse(nvbench::state &state) {
@@ -236,9 +216,7 @@ void Distance1cusparse(nvbench::state &state) {
 
     thrust::device_vector<int> coloring(mat_loader.row_ptr[mat_loader.m_rows]);
 
-    state.add_element_count(0, MAT_NAME);
-    state.add_element_count(mat_loader.m_rows, "Rows");
-    state.add_element_count(mat_loader.row_ptr[mat_loader.m_rows], "Non-zeroes");
+    add_MatInfo(state);
 
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {		
 		    cusparseDcsrcolor(handle,
@@ -265,12 +243,19 @@ void Distance1cusparse(nvbench::state &state) {
 }
 
 
-
-using MyEnumList = nvbench::enum_type_list<1, 2, 4>;
-
-NVBENCH_BENCH_TYPES(Distance1, NVBENCH_TYPE_AXES(MyEnumList)).set_type_axes_names({"BLK_SM"});
-NVBENCH_BENCH_TYPES(Distance1Copy, NVBENCH_TYPE_AXES(MyEnumList)).set_type_axes_names({"BLK_SM"});
-NVBENCH_BENCH_TYPES(Distance2, NVBENCH_TYPE_AXES(MyEnumList)).set_type_axes_names({"BLK_SM"});
-NVBENCH_BENCH_TYPES(Distance2Bank, NVBENCH_TYPE_AXES(MyEnumList)).set_type_axes_names({"BLK_SM"});
-NVBENCH_BENCH_TYPES(Distance2Copy, NVBENCH_TYPE_AXES(MyEnumList)).set_type_axes_names({"BLK_SM"});
-NVBENCH_BENCH(Distance1cusparse);
+NVBENCH_BENCH_TYPES(Distance1, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+    .set_type_axes_names({"THREADS_SM", "BLK_SM"})
+    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+NVBENCH_BENCH_TYPES(Distance1Copy, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+    .set_type_axes_names({"THREADS_SM", "BLK_SM"})
+    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+// NVBENCH_BENCH_TYPES(Distance2, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+//     .set_type_axes_names({"THREADS_SM", "BLK_SM"})
+//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+// NVBENCH_BENCH_TYPES(Distance2Bank, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+//     .set_type_axes_names({"THREADS_SM", "BLK_SM"})
+//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+// NVBENCH_BENCH_TYPES(Distance2Copy, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+//     .set_type_axes_names({"THREADS_SM", "BLK_SM"})
+//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+// NVBENCH_BENCH(Distance1cusparse);

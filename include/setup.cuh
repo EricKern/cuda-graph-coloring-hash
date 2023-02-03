@@ -1,11 +1,9 @@
 #pragma once
 
-#include <cpumultiply.hpp>  //! header file for tiling
-#include <tiling.hpp>       //! header file for tiling
-
-#include <coloringCounters.cuh>
-#include <util.cuh>
-#include <defines.hpp>
+#include "tiling.hpp"       //! header file for tiling
+#include "coloring_counters.cuh"
+#include "hash.cuh"
+#include "util.cuh"
 
 namespace apa22_coloring {
 
@@ -14,37 +12,6 @@ enum Distance {
     D2,
     D2_SortNet
 };
-
-// Singleton class so we load matrix only once
-// consequentially we can only have only one matrix loaded at a time
-class MatLoader {
- public:
-  static MatLoader& getInstance(const char* path = def::Mat2) {
-    static MatLoader Instance(path);
-
-    return Instance;
-  }
-
-  MatLoader(const MatLoader&) = delete;
-  MatLoader& operator=(const MatLoader&) = delete;
-  
-  const char* path;
-  int* row_ptr;
-  int* col_ptr;
-  double* val_ptr;
-  int m_rows;
-
- private:
-  MatLoader(const char* path) : path(path) {
-    m_rows = cpumultiplyDloadMTX(path, &row_ptr, &col_ptr, &val_ptr);
-  }
-  ~MatLoader() {
-    delete[] row_ptr;
-    delete[] col_ptr;
-    delete[] val_ptr;
-  }
-};
-
 
 class Tiling {
  public:
@@ -69,7 +36,6 @@ class Tiling {
          int m_rows,
          void* kernel,
          int max_smem_SM = -1,        // If not all ShMem shall be used
-         bool bank_conflict_free = false,
          bool print = false);
 };
 
@@ -79,11 +45,11 @@ Tiling::Tiling(Distance dist,
                int m_rows,
                void* kernel,
                int max_smem_SM,
-               bool bank_conflict_free,
                bool print) : dist(dist) {
-  int devId, MaxShmemSizeSM;
+  int devId, MaxShmemSizeSM, BlockReserved;
   cudaGetDevice(&devId);
   cudaDeviceGetAttribute(&MaxShmemSizeSM, cudaDevAttrMaxSharedMemoryPerMultiprocessor, devId);
+  cudaDeviceGetAttribute(&BlockReserved, cudaDevAttrReservedSharedMemoryPerBlock, devId);
   // On Turing 64 kB Shmem hard Cap with 32kB L1.
   // There are other predefined "carveout" levels that might also be an option
   // if more L1 cache seems usefull (on Turing just 32kB).
@@ -97,14 +63,16 @@ Tiling::Tiling(Distance dist,
   cudaFuncAttributes a;
   cudaFuncGetAttributes(&a, kernel);
   // Starting with CC 8.0, cuda runtime needs 1KB shMem per block
-  int const static_shMem_SM = a.sharedSizeBytes * BLK_SM; 
-  int const max_dyn_SM = MaxShmemSizeSM - static_shMem_SM;
+  int const static_shMem_SM = a.sharedSizeBytes * BLK_SM;
+  int const reserved_shMem_SM = BlockReserved * BLK_SM;
+  int const max_dyn_SM = MaxShmemSizeSM - static_shMem_SM - reserved_shMem_SM;
   
   // cudaFuncSetAttribute(kernel, cudaFuncAttributePreferredSharedMemoryCarveout, 100);
   cudaFuncSetAttribute(kernel,
                       cudaFuncAttributeMaxDynamicSharedMemorySize, max_dyn_SM);
 
   if (print) {
+    std::printf("BlockReserved: %d\n", BlockReserved);
     std::printf("MaxShmemSizeSM: %d\n", MaxShmemSizeSM);
     std::printf("Static sharedSizeBytes Block: %ld\n", a.sharedSizeBytes);
     std::printf("Static sharedSizeBytes SM: %ld\n", a.sharedSizeBytes * BLK_SM);
@@ -221,7 +189,7 @@ GPUSetupD1::GPUSetupD1(int* row_ptr,
   // For each bit_width we allocate an int counter for each block
   len_blocks_arr = num_bit_widths * sizeof(Counters::value_type) * n_tiles;
   // And we do this for each hash function
-  len_blocks_arr *= hash_params.len;
+  len_blocks_arr *= num_hashes;
 
   cudaMalloc((void**)&(blocks_total1), len_blocks_arr);
   cudaMalloc((void**)&(blocks_max1), len_blocks_arr);
@@ -229,8 +197,8 @@ GPUSetupD1::GPUSetupD1(int* row_ptr,
   //==================================
   // Allocate memory for return values
   //==================================
-  cudaMalloc((void**)&d_total1, hash_params.len * sizeof(Counters));
-  cudaMalloc((void**)&d_max1, hash_params.len * sizeof(Counters));
+  cudaMalloc((void**)&d_total1, num_hashes * sizeof(Counters));
+  cudaMalloc((void**)&d_max1, num_hashes * sizeof(Counters));
 }
 
 GPUSetupD1::~GPUSetupD1(){
@@ -272,8 +240,8 @@ GPUSetupD2::GPUSetupD2(int* row_ptr,
   cudaMalloc((void**)&(blocks_total2), len_blocks_arr);
   cudaMalloc((void**)&(blocks_max2), len_blocks_arr);
 
-  cudaMalloc((void**)&d_total2, hash_params.len * sizeof(Counters));
-  cudaMalloc((void**)&d_max2, hash_params.len * sizeof(Counters));
+  cudaMalloc((void**)&d_total2, num_hashes * sizeof(Counters));
+  cudaMalloc((void**)&d_max2, num_hashes * sizeof(Counters));
 }
 
 GPUSetupD2::~GPUSetupD2() {

@@ -4,7 +4,8 @@ set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(CMAKE_CUDA_ARCHITECTURES "61;75")
+# set(CMAKE_CUDA_ARCHITECTURES "61;75")
+set(CMAKE_CUDA_ARCHITECTURES "86")
 
 project(graph-coloring VERSION 1.0 LANGUAGES CXX CUDA
     DESCRIPTION "cuda implementation of distance1 and distance2 coloring")
@@ -25,12 +26,13 @@ FetchContent_MakeAvailable(googletest)
 # add_subdirectory(tests)
 # google test end =======================================
 
-find_package(nvbench)
-# add_subdirectory(nvbench)
+# find_package(nvbench)
+add_subdirectory(nvbench)
 
 
 add_subdirectory(tiling)
 add_subdirectory(cpumultiply)
+add_subdirectory(benchmark)
 
 set(Target1Name main-coloring.out)
 add_executable(${Target1Name} main-coloring.cu)
@@ -40,26 +42,6 @@ target_include_directories(${Target1Name} PRIVATE "${PROJECT_SOURCE_DIR}/include
 target_compile_features(${Target1Name} PRIVATE cuda_std_17)
 target_link_libraries(${Target1Name} PRIVATE cusparse tiling cpumultiply)
 
-set(BenchTarget d1_d2_SortNet_bench.out)
-add_executable(${BenchTarget} benchmark/d1_d2_SortNet_bench.cu)
-target_compile_options(${BenchTarget} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
-target_include_directories(${BenchTarget} PRIVATE "${PROJECT_SOURCE_DIR}/include")
-target_link_libraries(${BenchTarget} PRIVATE tiling cpumultiply nvbench::main)
-set_target_properties(${BenchTarget} PROPERTIES COMPILE_FEATURES cuda_std_17)
-
-# set(BenchTarget numBlocks_bench.out)
-# add_executable(${BenchTarget} benchmark/numBlocks_bench.cu)
-# target_compile_options(${BenchTarget} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
-# target_include_directories(${BenchTarget} PRIVATE "${PROJECT_SOURCE_DIR}/include")
-# target_link_libraries(${BenchTarget} PRIVATE tiling cpumultiply nvbench::main)
-# set_target_properties(${BenchTarget} PROPERTIES COMPILE_FEATURES cuda_std_17)
-
-# set(partKernelsName partKernels.out)
-# add_executable(${partKernelsName} benchmark/partKernels.cu)
-# target_compile_options(${partKernelsName} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
-# target_include_directories(${partKernelsName} PRIVATE "${PROJECT_SOURCE_DIR}/include")
-# target_link_libraries(${partKernelsName} PRIVATE tiling cpumultiply nvbench::main)
-# set_target_properties(${partKernelsName} PROPERTIES COMPILE_FEATURES cuda_std_17)
 
 
 # set(tiling_test tiling_test.out)

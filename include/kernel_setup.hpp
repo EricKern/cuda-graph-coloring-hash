@@ -1,11 +1,10 @@
 #pragma once
-
-#include <cpumultiply.hpp>  //! header file for tiling
-#include <tiling.hpp>       //! header file for tiling
-#include <coloringCounters.cuh>
-
 #include <cmath>
 #include <cub/cub.cuh>
+
+#include "tiling.hpp"       //! header file for tiling
+#include "coloring_counters.cuh"
+
 
 
 namespace apa22_coloring {
