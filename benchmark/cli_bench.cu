@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
       Mat = search->second;
     }
     else {
-        std::cout << "Not found\n";
+        std::cout << "Using unknown user provided matrix path\n";
         Mat = mat_path; // assume user input is unkown valid path
     }
   }

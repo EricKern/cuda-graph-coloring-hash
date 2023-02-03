@@ -1,6 +1,8 @@
 #pragma once
 #include <nvbench/nvbench.cuh>
 #include "mat_loader.hpp"
+#include "coloring_counters.cuh"
+#include "hash.cuh"
 
 
 void add_MatInfo(nvbench::state &state) {
@@ -16,4 +18,20 @@ void add_MatInfo(nvbench::state &state) {
 
   state.add_element_count(mat.m_rows, "Rows");
   state.add_element_count(mat.row_ptr[mat.m_rows], "Non-zeroes");
+}
+
+void add_IOInfo(nvbench::state &state, int n_blocks){
+  using namespace apa22_coloring;
+  auto& mat = MatLoader::getInstance(nullptr);
+
+  // matrix
+  size_t in_elem = mat.m_rows + mat.row_ptr[mat.m_rows];
+  state.add_global_memory_reads<int>(in_elem, "Mat Row+Col");
+
+  // block reduction results
+  state.add_global_memory_writes<Counters>(n_blocks * num_hashes, "R1 Counters");
+
+  // last reduction
+  state.add_global_memory_reads<Counters>(n_blocks * num_hashes);
+  state.add_global_memory_writes<Counters>(num_hashes, "Results");
 }

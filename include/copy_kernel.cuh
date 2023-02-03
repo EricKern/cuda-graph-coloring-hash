@@ -18,13 +18,14 @@ void copyKernelDist1(IndexT* row_ptr,  // global mem
                     Counters* d_max) {
                     
     const int partNr = blockIdx.x;
+    const IndexT part_offset = tile_boundaries[partNr];
     const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
     extern __shared__ IndexT shMem[];
     IndexT* shMemRows = shMem;                      // n_tileNodes +1 elements
     IndexT* shMemCols = &shMemRows[n_tileNodes+1];
 
-    Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
+    Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, part_offset, n_tileNodes);
 
     // local collisions
     for (int k = 0; k < num_hashes; k++){
@@ -94,18 +95,17 @@ void copyKernelDist2(IndexT* row_ptr,  // global mem
                      Counters* d_max2) {
     
     const int partNr = blockIdx.x;
-    const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
-    
     IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
+    const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
     const int n_tileEdges =
-    row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
+        row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
 
     // shared mem size: 2 * (n_rows + 1 + n_cols)
     extern __shared__ IndexT shMem[];
     IndexT* shMemRows = shMem;                        // n_tileNodes + 1 elements
     IndexT* shMemCols = &shMemRows[n_tileNodes+1];    // n_tileEdges elements
   
-    Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries); 
+    Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, part_offset, n_tileNodes);
 
     for (int k = 0; k < num_hashes; k++){
         for (int i = 0; i < num_bit_widths; i++){

@@ -7,6 +7,7 @@
 #include "cli_parser.hpp"
 #include "mat_loader.hpp"
 #include "coloring.cuh"
+#include "coop_launch.cuh"
 #include "setup.cuh"
 #include "asc.cuh"
 #include "defines.hpp"
@@ -15,7 +16,7 @@
 #include "cpu_coloring.hpp"
 
 
-#define DIST2 1
+#define DIST2 0
 
 void printResult(const apa22_coloring::Counters& sum,
                  const apa22_coloring::Counters& max) {
@@ -57,7 +58,7 @@ int main(int argc, char const *argv[]) {
   Tiling tiling(D2_SortNet, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)coloring2KernelBank<THREADS, BLK_SM, int>,
+                (void*)coloring2coop<THREADS, BLK_SM, int>,
                 -1, true);
   GPUSetupD2 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
@@ -68,7 +69,7 @@ int main(int argc, char const *argv[]) {
   Tiling tiling(D1, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)coloring1Kernel<THREADS, BLK_SM, int>);
+                (void*)coloring1coop<THREADS, BLK_SM, int>);
   GPUSetupD1 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
                        tiling.tile_boundaries.get(),
@@ -92,19 +93,40 @@ int main(int argc, char const *argv[]) {
   dim3 blockSize(THREADS);
 
 #if DIST2
-  coloring2KernelBank<THREADS, BLK_SM>
-  <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
-                                         gpu_setup.d_col_ptr,
-                                         gpu_setup.d_tile_boundaries,
-                                         tiling.max_node_degree,
-                                         gpu_setup.blocks_total1,
-                                         gpu_setup.blocks_total2,
-                                         gpu_setup.blocks_max1,
-                                         gpu_setup.blocks_max2,
-                                         gpu_setup.d_total1,
-                                         gpu_setup.d_max1,
-                                         gpu_setup.d_total2,
-                                         gpu_setup.d_max2);
+  gridSize.x = get_coop_grid_size((void*)coloring2coop<THREADS,BLK_SM, int>,
+                                  blockSize.x, shMem_bytes);
+
+  void *kernelArgs[] = {(void *)&gpu_setup.d_row_ptr,
+                        (void *)&gpu_setup.d_col_ptr,
+                        (void *)&gpu_setup.d_tile_boundaries,
+                        (void *)&tiling.n_tiles,
+                        (void *)&tiling.max_node_degree,
+                        (void *)&gpu_setup.blocks_total1,
+                        (void *)&gpu_setup.blocks_total2,
+                        (void *)&gpu_setup.blocks_max1,
+                        (void *)&gpu_setup.blocks_max2,
+                        (void *)&gpu_setup.d_total1,
+                        (void *)&gpu_setup.d_max1,
+                        (void *)&gpu_setup.d_total2,
+                        (void *)&gpu_setup.d_max2
+                        };
+
+  cudaLaunchCooperativeKernel((void *)coloring2coop<THREADS,BLK_SM, int>, gridSize,
+                              blockSize, kernelArgs, shMem_bytes, NULL);
+
+  // coloring2KernelBank<THREADS, BLK_SM>
+  // <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
+  //                                        gpu_setup.d_col_ptr,
+  //                                        gpu_setup.d_tile_boundaries,
+  //                                        tiling.max_node_degree,
+  //                                        gpu_setup.blocks_total1,
+  //                                        gpu_setup.blocks_total2,
+  //                                        gpu_setup.blocks_max1,
+  //                                        gpu_setup.blocks_max2,
+  //                                        gpu_setup.d_total1,
+  //                                        gpu_setup.d_max1,
+  //                                        gpu_setup.d_total2,
+  //                                        gpu_setup.d_max2);
   // coloring2Kernel<THREADS, BLK_SM, int>
   // <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
   //                                        gpu_setup.d_col_ptr,
@@ -118,14 +140,29 @@ int main(int argc, char const *argv[]) {
   //                                        gpu_setup.d_total2,
   //                                        gpu_setup.d_max2);
 #else
-  coloring1Kernel<THREADS, BLK_SM>
-  <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
-                                         gpu_setup.d_col_ptr,
-                                         gpu_setup.d_tile_boundaries,
-                                         gpu_setup.blocks_total1,
-                                         gpu_setup.blocks_max1,
-                                         gpu_setup.d_total1,
-                                         gpu_setup.d_max1);
+  gridSize.x = get_coop_grid_size((void*)coloring1coop<THREADS, BLK_SM, int>,
+                                  blockSize.x, shMem_bytes);
+
+  void *kernelArgs[] = {(void *)&gpu_setup.d_row_ptr,
+                        (void *)&gpu_setup.d_col_ptr,
+                        (void *)&gpu_setup.d_tile_boundaries,
+                        (void *)&tiling.n_tiles,
+                        (void *)&gpu_setup.blocks_total1,
+                        (void *)&gpu_setup.blocks_max1,
+                        (void *)&gpu_setup.d_total1,
+                        (void *)&gpu_setup.d_max1
+                        };
+
+  cudaLaunchCooperativeKernel((void *)coloring1coop<THREADS,BLK_SM, int>, gridSize,
+                              blockSize, kernelArgs, shMem_bytes, NULL);
+  // coloring1Kernel<THREADS, BLK_SM>
+  // <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
+  //                                        gpu_setup.d_col_ptr,
+  //                                        gpu_setup.d_tile_boundaries,
+  //                                        gpu_setup.blocks_total1,
+  //                                        gpu_setup.blocks_max1,
+  //                                        gpu_setup.d_total1,
+  //                                        gpu_setup.d_max1);
 #endif
   cudaDeviceSynchronize();
 

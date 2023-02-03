@@ -5,7 +5,7 @@ set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # set(CMAKE_CUDA_ARCHITECTURES "61;75")
-set(CMAKE_CUDA_ARCHITECTURES "86")
+set(CMAKE_CUDA_ARCHITECTURES "75")
 
 project(graph-coloring VERSION 1.0 LANGUAGES CXX CUDA
     DESCRIPTION "cuda implementation of distance1 and distance2 coloring")

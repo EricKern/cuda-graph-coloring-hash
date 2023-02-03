@@ -36,6 +36,7 @@ void Distance1(nvbench::state& state,
   dim3 blockSize(THREADS);
 
   add_MatInfo(state);
+  add_IOInfo(state, gridSize.x);
 
   state.exec(
       [&](nvbench::launch& launch) {
@@ -68,6 +69,7 @@ void Distance1Copy(nvbench::state& state,
   dim3 blockSize(THREADS);
 
   add_MatInfo(state);
+  add_IOInfo(state, gridSize.x);
 
   state.exec(
       [&](nvbench::launch& launch) {
@@ -100,6 +102,7 @@ void Distance2(nvbench::state& state,
   dim3 blockSize(THREADS);
 
   add_MatInfo(state);
+  add_IOInfo(state, gridSize.x);
 
   state.exec(
       [&](nvbench::launch& launch) {
@@ -136,6 +139,7 @@ void Distance2Bank(nvbench::state& state,
   dim3 blockSize(THREADS);
 
   add_MatInfo(state);
+  add_IOInfo(state, gridSize.x);
 
   state.exec([&](nvbench::launch& launch) {
     kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
@@ -164,6 +168,7 @@ void Distance2Copy(nvbench::state& state,
   dim3 blockSize(THREADS);
 
   add_MatInfo(state);
+  add_IOInfo(state, gridSize.x);
 
   state.exec(
       [&](nvbench::launch& launch) {
@@ -217,6 +222,8 @@ void Distance1cusparse(nvbench::state &state) {
     thrust::device_vector<int> coloring(mat_loader.row_ptr[mat_loader.m_rows]);
 
     add_MatInfo(state);
+    size_t in_elem = mat_loader.m_rows + mat_loader.row_ptr[mat_loader.m_rows];
+    state.add_global_memory_reads<int>(in_elem);
 
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {		
 		    cusparseDcsrcolor(handle,

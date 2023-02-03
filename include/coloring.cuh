@@ -24,14 +24,11 @@ void Partition2ShMem(IndexT* shMemRows,
                      IndexT* shMemCols,
                      IndexT* row_ptr,     // global mem
                      IndexT* col_ptr,     // global mem
-                     IndexT* tile_boundaries) {
-  // Determine which tile to load with blockId
-  const int part_nr = blockIdx.x;
-
-  int part_size = tile_boundaries[part_nr+1] - tile_boundaries[part_nr] + 1;
+                     IndexT part_offset,  // tile_boundaries[part_nr]
+                     int n_tileNodes) {
+  int part_size = n_tileNodes + 1;
   // +1 to load one additional row_ptr value to determine size of last row
 
-  IndexT part_offset = tile_boundaries[part_nr];   // offset in row_ptr array
   // put row_ptr partition in shMem
   for (int i = threadIdx.x; i < part_size; i += blockDim.x) {
     shMemRows[i] = row_ptr[i + part_offset];
@@ -55,19 +52,17 @@ template <typename IndexT>
 __forceinline__ __device__
 void D1CollisionsLocal(IndexT* shMemRows,
                        IndexT* shMemCols,
-                       IndexT* tile_boundaries,
+                       const int n_tileNodes,
+                       IndexT part_offset,    // tile_boundaries[part_nr]
                        int hash_param,
                        Counters& total,
                        Counters& max) {
   Counters current_collisions;
-  // Global mem access in tile_boundaries !!!!!
-  const int part_nr = blockIdx.x;
-  const int n_tileNodes = tile_boundaries[part_nr+1] - tile_boundaries[part_nr];
 
   // for distance 1 we don't have to distinguish between intra tile nodes and
   // border nodes
   for (int i = threadIdx.x; i < n_tileNodes; i += blockDim.x) {
-    IndexT glob_row = tile_boundaries[part_nr] + i;
+    IndexT glob_row = part_offset + i;
     IndexT row_begin = shMemRows[i];
 		IndexT row_end = shMemRows[i + 1];
 
@@ -120,21 +115,22 @@ template <typename CubReduceT,
           typename CountT,
           typename ReductionOp>
 __forceinline__ __device__
-void D1LastReduction(CountT* blocks_res, Counters* out_counters, ReductionOp op,
-                     typename CubReduceT::TempStorage& temp_storage) {
-  const int elem_p_hash_fn = num_bit_widths * gridDim.x;
+void LastReduction(CountT* blocks_res_ptr, Counters* out_counters, int n_tiles,
+                       ReductionOp op,
+                       typename CubReduceT::TempStorage& temp_storage) {
+  const int elem_p_hash_fn = num_bit_widths * n_tiles;
   // Initial reduction during load in BlockLoadThreadReduce limits thread
   // local results to at most blockDim.x
 
   // Last block reduction
   #pragma unroll num_hashes
   for (int k = 0; k < num_hashes; ++k) {
+    int hash_offset = k * elem_p_hash_fn;
     #pragma unroll num_bit_widths
     for (int i = 0; i < num_bit_widths; ++i) {
-      int hash_offset = k * elem_p_hash_fn;
-      CountT* start_addr = blocks_res + hash_offset + i * gridDim.x;
+      CountT* start_addr = blocks_res_ptr + hash_offset + i * n_tiles;
 
-      CountT accu = BlockLoadThreadReduce(start_addr, gridDim.x, op);
+      CountT accu = BlockLoadThreadReduce(start_addr, n_tiles, op);
       accu = CubReduceT(temp_storage).Reduce(accu, op);
       cg::this_thread_block().sync();
       if (threadIdx.x == 0) {
@@ -163,14 +159,15 @@ void coloring1Kernel(IndexT* row_ptr,
                      Counters* d_max) {
   using CountT = Counters::value_type;
   const int partNr = blockIdx.x;
+  const IndexT part_offset = tile_boundaries[partNr];
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
 
   extern __shared__ IndexT shMem[];
   IndexT* shMemRows = shMem;                      // n_tileNodes +1 elements
   IndexT* shMemCols = &shMemRows[n_tileNodes+1];
-  
-  Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
-  
+
+  Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr,
+                  part_offset, n_tileNodes);
   typedef cub::BlockReduce<CountT, THREADS, RED_ALGO> BlockReduceT;
   __shared__ typename BlockReduceT::TempStorage temp_storage;
 
@@ -179,8 +176,8 @@ void coloring1Kernel(IndexT* row_ptr,
     // thread local array to count collisions
     Counters total_collisions;
     Counters max_collisions;
-    D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
-                      total_collisions, max_collisions);
+    D1CollisionsLocal(shMemRows, shMemCols, n_tileNodes, part_offset,
+                      start_hash + k, total_collisions, max_collisions);
 
     #pragma unroll num_bit_widths
     for (int i = 0; i < num_bit_widths; ++i) {
@@ -220,8 +217,10 @@ void coloring1Kernel(IndexT* row_ptr,
 
   // The last block reduces the results of all other blocks
   if (amLast) {
-    D1LastReduction<BlockReduceT>(blocks_total1, d_total, cub::Sum{}, temp_storage);
-    D1LastReduction<BlockReduceT>(blocks_max1, d_max, cub::Max{}, temp_storage);
+    LastReduction<BlockReduceT>(blocks_total1, d_total, gridDim.x, cub::Sum{},
+                                temp_storage);
+    LastReduction<BlockReduceT>(blocks_max1, d_max, gridDim.x, cub::Max{},
+                                temp_storage);
 
     if (threadIdx.x == 0) {
       // reset retirement count so that next run succeeds
@@ -237,17 +236,15 @@ __forceinline__ __device__
 void D2CollisionsLocal(IndexT* shMemRows,
                        IndexT* shMemCols,
                        WorkspaceT* shMemWorkspace,
-                       IndexT* tile_boundaries,
-                       int hash_param,
+                       const int n_tileNodes,
+                       IndexT part_offset,    // tile_boundaries[part_nr]
+                       const int hash_param,
                        Counters& total,
                        Counters& max) {
   Counters current_collisions;
-  // Global mem access in tile_boundaries !!!!!
-  const int part_nr = blockIdx.x;
-  const int n_tileNodes = tile_boundaries[part_nr+1] - tile_boundaries[part_nr];
 
   for (int i = threadIdx.x; i < n_tileNodes; i += blockDim.x) {
-    IndexT glob_row = tile_boundaries[part_nr] + i;
+    IndexT glob_row = part_offset + i;
     IndexT row_begin = shMemRows[i];
 		IndexT row_end = shMemRows[i + 1];
 
@@ -341,9 +338,8 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
   using HashT = std::uint32_t;
   using CountT = Counters::value_type;
   const int partNr = blockIdx.x;
+  const IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
   const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
-
-  IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
   const int n_tileEdges =
       row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
 
@@ -357,7 +353,8 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
   // Since shMemCols is 32 or 64 bit, allignment for HashT which is smaller
   // is fine.
   
-  Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
+  Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr,
+                  part_offset, n_tileNodes);
 
   typedef cub::BlockReduce<CountT, THREADS, RED_ALGO> BlockReduceT;
   __shared__ typename BlockReduceT::TempStorage temp_storage;
@@ -368,8 +365,8 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
     Counters total2, max2;
     // D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
     //                   total1, max1);
-    D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
-                      start_hash + k, total2, max2);
+    D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, n_tileNodes,
+                      part_offset, start_hash + k, total2, max2);
     #pragma unroll num_bit_widths
     for (int i = 0; i < num_bit_widths; ++i) {
       // CountT l1_sum1 = BlockReduceT(temp_storage)
@@ -416,11 +413,11 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
 
   // The last block reduces the results of all other blocks
   if (amLast) {
-    // D1LastReduction<BlockReduceT>(blocks_total1, d_total1, cub::Sum{}, temp_storage);
-    // D1LastReduction<BlockReduceT>(blocks_max1, d_max1, cub::Max{}, temp_storage);
+    // LastReduction<BlockReduceT>(blocks_total1, d_total1, gridDim.x, cub::Sum{}, temp_storage);
+    // LastReduction<BlockReduceT>(blocks_max1, d_max1, gridDim.x, cub::Max{}, temp_storage);
 
-    D1LastReduction<BlockReduceT>(blocks_total2, d_total2, cub::Sum{}, temp_storage);
-    D1LastReduction<BlockReduceT>(blocks_max2, d_max2, cub::Max{}, temp_storage);
+    LastReduction<BlockReduceT>(blocks_total2, d_total2, gridDim.x, cub::Sum{}, temp_storage);
+    LastReduction<BlockReduceT>(blocks_max2, d_max2, gridDim.x, cub::Max{}, temp_storage);
 
     if (threadIdx.x == 0) {
       // reset retirement count so that next run succeeds
@@ -433,22 +430,21 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
 template <typename IndexT,
           typename WorkspaceT>
 __forceinline__ __device__
-void D2CollisionsLocalBank(IndexT* shMemRows,
-                           IndexT* shMemCols,
-                           WorkspaceT* shMemWorkspace,
-                           IndexT* tile_boundaries,
-                           int max_node_degree,
-                           int hash_param,
-                           Counters& total,
-                           Counters& max) {
+void D2CollisionsSortNet(IndexT* shMemRows,
+                         IndexT* shMemCols,
+                         WorkspaceT* shMemWorkspace,
+                         const int max_node_degree,
+                         const int n_tileNodes,
+                         IndexT part_offset,    // tile_boundaries[part_nr]
+                         const int hash_param,
+                         Counters& total,
+                         Counters& max) {
   Counters current_collisions;
-  // Global mem access in tile_boundaries !!!!!
-  const int part_nr = blockIdx.x;
-  const int n_tileNodes = tile_boundaries[part_nr+1] - tile_boundaries[part_nr];
+
   const int mem_per_node = roundUp(max_node_degree + 1, 32) + 1;
 
   for (int i = threadIdx.x; i < n_tileNodes; i += blockDim.x) {
-    IndexT glob_row = tile_boundaries[part_nr] + i;
+    IndexT glob_row = part_offset + i;
     IndexT row_begin = shMemRows[i];
 		IndexT row_end = shMemRows[i + 1];
 
@@ -475,7 +471,6 @@ void D2CollisionsLocalBank(IndexT* shMemRows,
       // the sorted bitreversed array
     }
 
-    // thrust::sort(thrust::seq, thread_ws, thread_ws + mem_per_node);
     // sorting network to avoid bank conflicts
     odd_even_merge_sort(thread_ws, mem_per_node);
 
@@ -550,9 +545,8 @@ void coloring2KernelBank(IndexT* row_ptr,  // global mem
   using HashT = std::uint32_t;
   using CountT = Counters::value_type;
   const int partNr = blockIdx.x;
-  const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
-
-  IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
+  const IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
+  const int n_tileNodes = tile_boundaries[partNr+1] - part_offset;
   const int n_tileEdges = row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
 
   // shared mem size: 2 * (n_rows + 1 + n_cols)
@@ -562,8 +556,9 @@ void coloring2KernelBank(IndexT* row_ptr,  // global mem
   HashT* shMemWorkspace = reinterpret_cast<HashT*>(&shMemCols[n_tileEdges]);
   // Since shMemCols is 32 or 64 bit, allignment for HashT which is smaller
   // is fine. Tiling guarantees that shMemWorkspace is enough
-  
-  Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, tile_boundaries);
+
+  Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, part_offset,
+                  n_tileNodes);
 
   typedef cub::BlockReduce<CountT, THREADS, RED_ALGO> BlockReduceT;
   __shared__ typename BlockReduceT::TempStorage temp_storage;
@@ -574,8 +569,9 @@ void coloring2KernelBank(IndexT* row_ptr,  // global mem
     Counters total2, max2;
     // D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
     //                   total1, max1);
-    D2CollisionsLocalBank(shMemRows, shMemCols, shMemWorkspace, tile_boundaries,
-                          max_node_degree, start_hash + k, total2, max2);
+    D2CollisionsSortNet(shMemRows, shMemCols, shMemWorkspace,
+                          max_node_degree, n_tileNodes, part_offset,
+                          start_hash + k, total2, max2);
     #pragma unroll num_bit_widths
     for (int i = 0; i < num_bit_widths; ++i) {
       // CountT l1_sum1 = BlockReduceT(temp_storage)
@@ -622,11 +618,11 @@ void coloring2KernelBank(IndexT* row_ptr,  // global mem
 
   // The last block reduces the results of all other blocks
   if (amLast) {
-    // D1LastReduction<BlockReduceT>(blocks_total1, d_total1, cub::Sum{}, temp_storage);
-    // D1LastReduction<BlockReduceT>(blocks_max1, d_max1, cub::Max{}, temp_storage);
+    // LastReduction<BlockReduceT>(blocks_total1, d_total1, gridDim.x, cub::Sum{}, temp_storage);
+    // LastReduction<BlockReduceT>(blocks_max1, d_max1, gridDim.x, cub::Max{}, temp_storage);
 
-    D1LastReduction<BlockReduceT>(blocks_total2, d_total2, cub::Sum{}, temp_storage);
-    D1LastReduction<BlockReduceT>(blocks_max2, d_max2, cub::Max{}, temp_storage);
+    LastReduction<BlockReduceT>(blocks_total2, d_total2, gridDim.x, cub::Sum{}, temp_storage);
+    LastReduction<BlockReduceT>(blocks_max2, d_max2, gridDim.x, cub::Max{}, temp_storage);
 
     if (threadIdx.x == 0) {
       // reset retirement count so that next run succeeds
