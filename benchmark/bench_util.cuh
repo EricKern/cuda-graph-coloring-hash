@@ -6,8 +6,8 @@
 
 
 void add_MatInfo(nvbench::state &state) {
-  auto& mat = apa22_coloring::MatLoader::getInstance(nullptr);
-  std::string path(mat.path);
+  auto& mat_l = apa22_coloring::MatLoader::getInstance(nullptr);
+  std::string path(mat_l.path);
   std::string base_filename = path.substr(path.find_last_of("/\\") + 1);
   std::string::size_type const p(base_filename.find_last_of('.'));
   std::string file_without_extension = base_filename.substr(0, p);
@@ -16,16 +16,16 @@ void add_MatInfo(nvbench::state &state) {
   summ_mame.set_string("name", "Matrix Name");
   summ_mame.set_string("value", file_without_extension);
 
-  state.add_element_count(mat.m_rows, "Rows");
-  state.add_element_count(mat.row_ptr[mat.m_rows], "Non-zeroes");
+  state.add_element_count(mat_l.m_rows, "Rows");
+  state.add_element_count(mat_l.row_ptr[mat_l.m_rows], "Non-zeroes");
 }
 
 void add_IOInfo(nvbench::state &state, int n_blocks){
   using namespace apa22_coloring;
-  auto& mat = MatLoader::getInstance(nullptr);
+  auto& mat_l = MatLoader::getInstance(nullptr);
 
   // matrix
-  size_t in_elem = mat.m_rows + mat.row_ptr[mat.m_rows];
+  size_t in_elem = mat_l.m_rows + mat_l.row_ptr[mat_l.m_rows];
   state.add_global_memory_reads<int>(in_elem, "Mat Row+Col");
 
   // block reduction results

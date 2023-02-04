@@ -37,9 +37,7 @@ int main(int argc, char** argv) {
     }
   }
   else{
-    // Print NVBench help.
-    const char* args[1] = {"-h"};
-    NVBENCH_MAIN_BODY(1, args);
+    NVBENCH_MAIN_BODY(argc, argv);
     return 0;
   }
 

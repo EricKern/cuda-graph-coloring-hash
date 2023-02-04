@@ -82,7 +82,7 @@ void D1CollisionsLocal(IndexT* shMemRows,
           if ((row_hash & mask) == (col_hash & mask)) {
             current_collisions.m[counter_idx] += 1;
           }
-          // else if {
+          // else {
           //   // if hashes differ in lower bits they also differ when increasing
           //   // the bit_width
           //   break;
