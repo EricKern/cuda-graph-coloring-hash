@@ -17,16 +17,16 @@ static constexpr const char* CurlCurl_4 =
     "/mnt/matrix_store/MM/Bodendiek/CurlCurl_4/CurlCurl_4.mtx";
 
 static constexpr const char* atmosmodd =
-    "/mnt/matrix_store/MM/Bourchtein/atmosmodd/admosmodd.mtx";
+    "/mnt/matrix_store/MM/Bourchtein/atmosmodd/atmosmodd.mtx";
 
 static constexpr const char* atmosmodj =
-    "/mnt/matrix_store/MM/Bourchtein/atmosmodj/admosmodj.mtx";
+    "/mnt/matrix_store/MM/Bourchtein/atmosmodj/atmosmodj.mtx";
 
 static constexpr const char* atmosmodl =
-    "/mnt/matrix_store/MM/Bourchtein/atmosmodl/admosmodl.mtx";
+    "/mnt/matrix_store/MM/Bourchtein/atmosmodl/atmosmodl.mtx";
 
 static constexpr const char* atmosmodm =
-    "/mnt/matrix_store/MM/Bourchtein/atmosmodm/admosmodm.mtx";
+    "/mnt/matrix_store/MM/Bourchtein/atmosmodm/atmosmodm.mtx";
 
 static constexpr const char* af_shell3 =
     "/mnt/matrix_store/MM/Schenk_AFE/af_shell3/af_shell3.mtx";
