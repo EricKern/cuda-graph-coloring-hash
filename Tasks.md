@@ -82,3 +82,16 @@ Shared memory für dist2 mit sorting network braucht genaue größe der partitio
 - Basic versionen benchmarken
 - plotscript für naive versionen
 - Cooperative Launch
+
+# 06.02
+- sparse matrix-matrix multiply geht nicht braucht zu viel speicher
+- CurlCurl_4 mit 100MB zu wenig.
+- Counter in Registern ist default initialisiert oder? Müssen wir nicht extra?
+- Was ist gute Metrik wenn wir nicht mehr Memory bound sind.
+- Evtl elements per second (row + columns)/t
+
+- Profile nur laden d1 (profile + plot(evtl nur nvbench tabelle))
+- Dist1 nur Hash berechnen und plot der linear ansteigt. -> compute bound
+- Profile mit reduction
+- Collisions Dist2
+

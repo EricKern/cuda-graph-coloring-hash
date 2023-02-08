@@ -97,7 +97,6 @@ void D1CollisionsLocal(IndexT* shMemRows,
     current_collisions = Counters{};
   }
 
-  cg::this_thread_block().sync();
 }
 
 template <typename CountT,

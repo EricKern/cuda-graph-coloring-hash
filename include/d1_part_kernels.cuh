@@ -8,7 +8,9 @@ using namespace apa22_coloring;
 // coloring1OnlyHash        including load
 // coloring1LoadWrite       load and write but no hash
 // coloring1HashWrite       all above but no reduction
-// coloring1FirstReduce     all above but with block reduction
+// coloring1ReduceNoHash    Load, block Reduce and write
+// coloring1FirstReduce     Load, Hash, block Reduce and write
+// coloring1StructReduceNoHash
 
 template <int THREADS,
           int BLK_SM,
@@ -38,6 +40,7 @@ void coloring1OnlyLoad(IndexT* row_ptr,
 template <int THREADS,
           int BLK_SM,
           typename IndexT,
+          int NUM_HASH_FN = num_hashes,
           cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
@@ -59,8 +62,8 @@ void coloring1OnlyHash(IndexT* row_ptr,
   Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr,
                   part_offset, n_tileNodes);
 
-  #pragma unroll num_hashes
-  for (int k = 0; k < num_hashes; ++k) {
+  #pragma unroll NUM_HASH_FN
+  for (int k = 0; k < NUM_HASH_FN; ++k) {
     // thread local array to count collisions
     Counters total_collisions;
     Counters max_collisions;
@@ -172,6 +175,180 @@ void coloring1HashWrite(IndexT* row_ptr,
         int idx = k * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
         blocks_total1[idx] = total_collisions.m[i];
         blocks_max1[idx] = max_collisions.m[i];
+      }
+    }
+  }
+}
+
+template <int THREADS,
+          int BLK_SM,
+          typename IndexT,
+          cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
+__global__
+__launch_bounds__(THREADS, BLK_SM)
+void coloring1ReduceNoHash(IndexT* row_ptr,
+                     IndexT* col_ptr,
+                     IndexT* tile_boundaries,   // gridDim.x + 1 elements
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
+                     Counters* d_total,
+                     Counters* d_max) {
+  using CountT = Counters::value_type;
+  const int partNr = blockIdx.x;
+  const IndexT part_offset = tile_boundaries[partNr];
+  const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
+
+  extern __shared__ IndexT shMem[];
+  IndexT* shMemRows = shMem;                      // n_tileNodes +1 elements
+  IndexT* shMemCols = &shMemRows[n_tileNodes+1];
+
+  Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr,
+                  part_offset, n_tileNodes);
+  typedef cub::BlockReduce<CountT, THREADS, RED_ALGO> BlockReduceT;
+  __shared__ typename BlockReduceT::TempStorage temp_storage;
+
+  #pragma unroll num_hashes
+  for (int k = 0; k < num_hashes; ++k) {
+    // thread local array to count collisions
+    Counters total_collisions;
+    Counters max_collisions;
+
+    #pragma unroll num_bit_widths
+    for (int i = 0; i < num_bit_widths; ++i) {
+      CountT l1_sum = BlockReduceT(temp_storage)
+                            .Reduce(total_collisions.m[i], cub::Sum{});
+      cg::this_thread_block().sync();
+      CountT l1_max = BlockReduceT(temp_storage)
+                            .Reduce(max_collisions.m[i], cub::Max{});
+      cg::this_thread_block().sync();
+
+      // block_total* holds mem for all intermediate results of each block.
+      // In this array all block reduce results of first counter are stored
+      // contiguous followed by the reduce results of the next counter ...
+      // Results for each hash function are stored after each other.
+      if(threadIdx.x == 0){
+        const int elem_p_hash_fn = num_bit_widths * gridDim.x;
+        //        hash segment         bit_w segment   block value
+        //        __________________   _____________   ___________
+        int idx = k * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
+        blocks_total1[idx] = l1_sum;
+        blocks_max1[idx] = l1_max;
+      }
+    }
+  }
+}
+
+template <int THREADS,
+          int BLK_SM,
+          typename IndexT,
+          cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
+__global__
+__launch_bounds__(THREADS, BLK_SM)
+void coloring1ReduceNoHashNoBarrier(IndexT* row_ptr,
+                     IndexT* col_ptr,
+                     IndexT* tile_boundaries,   // gridDim.x + 1 elements
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
+                     Counters* d_total,
+                     Counters* d_max) {
+  using CountT = Counters::value_type;
+  const int partNr = blockIdx.x;
+  const IndexT part_offset = tile_boundaries[partNr];
+  const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
+
+  extern __shared__ IndexT shMem[];
+  IndexT* shMemRows = shMem;                      // n_tileNodes +1 elements
+  IndexT* shMemCols = &shMemRows[n_tileNodes+1];
+
+  Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr,
+                  part_offset, n_tileNodes);
+  typedef cub::BlockReduce<CountT, THREADS, RED_ALGO> BlockReduceT;
+  typedef typename BlockReduceT::TempStorage TempStorageTRed;
+  __shared__ TempStorageTRed temp_storage[num_hashes * num_bit_widths * 2];
+
+  #pragma unroll num_hashes
+  for (int k = 0; k < num_hashes; ++k) {
+    // thread local array to count collisions
+    Counters total_collisions;
+    Counters max_collisions;
+
+    #pragma unroll num_bit_widths
+    for (int i = 0; i < num_bit_widths; ++i) {
+      CountT l1_sum = BlockReduceT(temp_storage[k*i])
+                            .Reduce(total_collisions.m[i], cub::Sum{});
+      CountT l1_max = BlockReduceT(temp_storage[k*i + 1])
+                            .Reduce(max_collisions.m[i], cub::Max{});
+
+      // block_total* holds mem for all intermediate results of each block.
+      // In this array all block reduce results of first counter are stored
+      // contiguous followed by the reduce results of the next counter ...
+      // Results for each hash function are stored after each other.
+      if(threadIdx.x == 0){
+        const int elem_p_hash_fn = num_bit_widths * gridDim.x;
+        //        hash segment         bit_w segment   block value
+        //        __________________   _____________   ___________
+        int idx = k * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
+        blocks_total1[idx] = l1_sum;
+        blocks_max1[idx] = l1_max;
+      }
+    }
+  }
+}
+
+template <int THREADS,
+          int BLK_SM,
+          typename IndexT,
+          cub::BlockReduceAlgorithm RED_ALGO=cub::BLOCK_REDUCE_WARP_REDUCTIONS>
+__global__
+__launch_bounds__(THREADS, BLK_SM)
+void coloring1StructReduceNoHash(IndexT* row_ptr,
+                     IndexT* col_ptr,
+                     IndexT* tile_boundaries,   // gridDim.x + 1 elements
+                     Counters::value_type* blocks_total1,
+                     Counters::value_type* blocks_max1,
+                     Counters* d_total,
+                     Counters* d_max) {
+  using CountT = Counters::value_type;
+  const int partNr = blockIdx.x;
+  const IndexT part_offset = tile_boundaries[partNr];
+  const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
+
+  extern __shared__ IndexT shMem[];
+  IndexT* shMemRows = shMem;                      // n_tileNodes +1 elements
+  IndexT* shMemCols = &shMemRows[n_tileNodes+1];
+
+  Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr,
+                  part_offset, n_tileNodes);
+  typedef cub::BlockReduce<Counters, THREADS, RED_ALGO> BlockReduceT;
+  typedef typename BlockReduceT::TempStorage TempStorageTRed;
+  __shared__ TempStorageTRed temp_storage;
+
+  #pragma unroll num_hashes
+  for (int k = 0; k < num_hashes; ++k) {
+    // thread local array to count collisions
+    Counters total_collisions;
+    Counters max_collisions;
+
+    Counters l1_Counter_sum = BlockReduceT(temp_storage)
+                          .Reduce(total_collisions, Sum_Counters{});
+    cg::this_thread_block().sync();
+    Counters l1_Counter_max = BlockReduceT(temp_storage)
+                          .Reduce(max_collisions, Max_Counters{});
+    cg::this_thread_block().sync();
+
+    #pragma unroll num_bit_widths
+    for (int i = 0; i < num_bit_widths; ++i) {
+      // block_total* holds mem for all intermediate results of each block.
+      // In this array all block reduce results of first counter are stored
+      // contiguous followed by the reduce results of the next counter ...
+      // Results for each hash function are stored after each other.
+      if(threadIdx.x == 0){
+        const int elem_p_hash_fn = num_bit_widths * gridDim.x;
+        //        hash segment         bit_w segment   block value
+        //        __________________   _____________   ___________
+        int idx = k * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
+        blocks_total1[idx] = l1_Counter_sum.m[i];
+        blocks_max1[idx] = l1_Counter_max.m[i];
       }
     }
   }
