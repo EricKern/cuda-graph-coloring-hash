@@ -11,10 +11,12 @@
 #include "cli_bench.cu"
 #include "bench_util.cuh"
 
-using BLOCKS_SM = nvbench::enum_type_list<1, 2>;
-using THREADS_SM = nvbench::enum_type_list<640, 768, 896, 1024>;
-static constexpr const char* SM_ShMem_key = "SM_ShMem";
-std::vector<nvbench::int64_t> SM_ShMem_range = {-1};
+using BLOCKS_SM = nvbench::enum_type_list<1, 2, 4>;
+using THREADS_SM = nvbench::enum_type_list<512, 640, 768, 896, 1024>;
+static constexpr const char* Blocks_SM_key = "BLK_SM";
+static constexpr const char* Threads_SM_key = "THREADS_SM";
+static constexpr const char* SM_ShMem_key = "Smem_SM";
+std::vector<nvbench::int64_t> SM_ShMem_range = {32*1024, 64*1024};
 
 using namespace apa22_coloring;
 
@@ -27,7 +29,8 @@ void Distance1(nvbench::state& state,
 
   MatLoader& mat_loader = MatLoader::getInstance();
   Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
@@ -60,7 +63,42 @@ void Distance1Copy(nvbench::state& state,
 
   MatLoader& mat_loader = MatLoader::getInstance();
   Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
+  GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
+                       tiling.tile_boundaries.get(), tiling.n_tiles);
+
+  size_t shMem_bytes = tiling.tile_target_mem;
+  dim3 gridSize(tiling.n_tiles);
+  dim3 blockSize(THREADS);
+
+  add_MatInfo(state);
+  add_IOInfo(state, gridSize.x);
+
+  state.exec(
+      [&](nvbench::launch& launch) {
+        kernel<<<gridSize, blockSize, shMem_bytes, launch.get_stream()>>>(
+            gpu_setup.d_row_ptr,
+            gpu_setup.d_col_ptr,
+            gpu_setup.d_tile_boundaries,
+            gpu_setup.blocks_total1,
+            gpu_setup.blocks_max1,
+            gpu_setup.d_total1,
+            gpu_setup.d_max1);
+      });
+}
+
+template <int MAX_THREADS_SM, int BLK_SM>
+void Distance1CopyFence(nvbench::state& state,
+                        nvbench::type_list<nvbench::enum_type<MAX_THREADS_SM>,
+                                           nvbench::enum_type<BLK_SM>>) {
+  constexpr int THREADS = MAX_THREADS_SM / BLK_SM;
+  auto kernel = copyKernelD1TFence<THREADS, BLK_SM, int>;
+
+  MatLoader& mat_loader = MatLoader::getInstance();
+  Tiling tiling(D1, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD1 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
@@ -93,7 +131,8 @@ void Distance2(nvbench::state& state,
 
   MatLoader& mat_loader = MatLoader::getInstance();
   Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
@@ -130,7 +169,8 @@ void Distance2Bank(nvbench::state& state,
 
   MatLoader& mat_loader = MatLoader::getInstance();
   Tiling tiling(D2_SortNet, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
@@ -159,7 +199,8 @@ void Distance2Copy(nvbench::state& state,
 
   MatLoader& mat_loader = MatLoader::getInstance();
   Tiling tiling(D2, BLK_SM, mat_loader.row_ptr, mat_loader.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD2 gpu_setup(mat_loader.row_ptr, mat_loader.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
@@ -251,18 +292,23 @@ void Distance1cusparse(nvbench::state &state) {
 
 
 NVBENCH_BENCH_TYPES(Distance1, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-    .set_type_axes_names({"THREADS_SM", "BLK_SM"})
+    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
 NVBENCH_BENCH_TYPES(Distance1Copy, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-    .set_type_axes_names({"THREADS_SM", "BLK_SM"})
+    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
-// NVBENCH_BENCH_TYPES(Distance2, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-//     .set_type_axes_names({"THREADS_SM", "BLK_SM"})
-//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
-// NVBENCH_BENCH_TYPES(Distance2Bank, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-//     .set_type_axes_names({"THREADS_SM", "BLK_SM"})
-//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
-// NVBENCH_BENCH_TYPES(Distance2Copy, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-//     .set_type_axes_names({"THREADS_SM", "BLK_SM"})
-//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
-// NVBENCH_BENCH(Distance1cusparse);
+
+NVBENCH_BENCH_TYPES(Distance1CopyFence, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
+    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+
+NVBENCH_BENCH_TYPES(Distance2, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
+    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+NVBENCH_BENCH_TYPES(Distance2Bank, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
+    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+NVBENCH_BENCH_TYPES(Distance2Copy, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
+    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+NVBENCH_BENCH(Distance1cusparse);

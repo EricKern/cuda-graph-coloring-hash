@@ -28,7 +28,8 @@ void Dist1(nvbench::state& state,
 
   MatLoader& mat_l = MatLoader::getInstance();
   Tiling tiling(D1, BLK_SM, mat_l.row_ptr, mat_l.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD1 gpu_setup(mat_l.row_ptr, mat_l.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 

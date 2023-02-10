@@ -28,7 +28,8 @@ void D1OnlyLoad(nvbench::state& state,
 
   MatLoader& mat_l = MatLoader::getInstance();
   Tiling tiling(D1, BLK_SM, mat_l.row_ptr, mat_l.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD1 gpu_setup(mat_l.row_ptr, mat_l.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
@@ -59,7 +60,8 @@ void D1OnlyHash(nvbench::state& state,
 
   MatLoader& mat_l = MatLoader::getInstance();
   Tiling tiling(D1, BLK_SM, mat_l.row_ptr, mat_l.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD1 gpu_setup(mat_l.row_ptr, mat_l.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
@@ -89,7 +91,8 @@ void D1LoadWrite(nvbench::state& state,
 
   MatLoader& mat_l = MatLoader::getInstance();
   Tiling tiling(D1, BLK_SM, mat_l.row_ptr, mat_l.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD1 gpu_setup(mat_l.row_ptr, mat_l.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
@@ -121,7 +124,8 @@ void D1HashWrite(nvbench::state& state,
 
   MatLoader& mat_l = MatLoader::getInstance();
   Tiling tiling(D1, BLK_SM, mat_l.row_ptr, mat_l.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD1 gpu_setup(mat_l.row_ptr, mat_l.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
@@ -153,7 +157,8 @@ void D1FirstReduceNoHash(nvbench::state& state,
 
   MatLoader& mat_l = MatLoader::getInstance();
   Tiling tiling(D1, BLK_SM, mat_l.row_ptr, mat_l.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD1 gpu_setup(mat_l.row_ptr, mat_l.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
@@ -185,7 +190,8 @@ void D1FirstReduceNoHashNoBarrier(nvbench::state& state,
 
   MatLoader& mat_l = MatLoader::getInstance();
   Tiling tiling(D1, BLK_SM, mat_l.row_ptr, mat_l.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD1 gpu_setup(mat_l.row_ptr, mat_l.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
@@ -217,7 +223,8 @@ void D1FirstStructReduceNoHash(nvbench::state& state,
 
   MatLoader& mat_l = MatLoader::getInstance();
   Tiling tiling(D1, BLK_SM, mat_l.row_ptr, mat_l.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD1 gpu_setup(mat_l.row_ptr, mat_l.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
@@ -249,7 +256,8 @@ void D1FirstReduce(nvbench::state& state,
 
   MatLoader& mat_l = MatLoader::getInstance();
   Tiling tiling(D1, BLK_SM, mat_l.row_ptr, mat_l.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD1 gpu_setup(mat_l.row_ptr, mat_l.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
@@ -281,7 +289,8 @@ void D1Full(nvbench::state& state,
 
   MatLoader& mat_l = MatLoader::getInstance();
   Tiling tiling(D1, BLK_SM, mat_l.row_ptr, mat_l.m_rows,
-                reinterpret_cast<void*>(kernel));
+                reinterpret_cast<void*>(kernel),
+                state.get_int64(SM_ShMem_key));
   GPUSetupD1 gpu_setup(mat_l.row_ptr, mat_l.col_ptr,
                        tiling.tile_boundaries.get(), tiling.n_tiles);
 
