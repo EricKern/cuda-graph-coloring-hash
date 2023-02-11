@@ -13,7 +13,7 @@ using THREADS_SM = nvbench::enum_type_list<512, 640, 768, 896, 1024>;
 using N_Hashes = nvbench::enum_type_list<15>;
 // using N_Hashes = nvbench::enum_type_list<1, 3, 5, 7, 9, 11, 13, 15>;
 static constexpr const char* SM_ShMem_key = "Smem_SM";
-std::vector<nvbench::int64_t> SM_ShMem_range = {32*1024, 64*1024};
+std::vector<nvbench::int64_t> SM_ShMem_range = {64*1024};
 static constexpr const char* Blocks_SM_key = "BLK_SM";
 static constexpr const char* Threads_SM_key = "THREADS_SM";
 
@@ -337,6 +337,7 @@ NVBENCH_BENCH_TYPES(D1FirstReduceNoHash, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM
 NVBENCH_BENCH_TYPES(D1FirstReduce, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+    
 NVBENCH_BENCH_TYPES(D1Full, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);

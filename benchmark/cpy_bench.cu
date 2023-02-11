@@ -13,6 +13,7 @@
 
 using BLOCKS_SM = nvbench::enum_type_list<1, 2, 4>;
 using THREADS_SM = nvbench::enum_type_list<512, 640, 768, 896, 1024>;
+using THREADS_SM_Fine = nvbench::enum_type_list<256, 384, 512, 640, 768, 896, 1024>;
 static constexpr const char* Blocks_SM_key = "BLK_SM";
 static constexpr const char* Threads_SM_key = "THREADS_SM";
 static constexpr const char* SM_ShMem_key = "Smem_SM";
@@ -291,24 +292,27 @@ void Distance1cusparse(nvbench::state &state) {
 }
 
 
-NVBENCH_BENCH_TYPES(Distance1, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
-    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
-NVBENCH_BENCH_TYPES(Distance1Copy, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+NVBENCH_BENCH_TYPES(Distance1, NVBENCH_TYPE_AXES(THREADS_SM_Fine, BLOCKS_SM))
     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
 
-NVBENCH_BENCH_TYPES(Distance1CopyFence, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
-    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+// NVBENCH_BENCH_TYPES(Distance1Copy, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+//     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
+//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
 
-NVBENCH_BENCH_TYPES(Distance2, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
-    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
-NVBENCH_BENCH_TYPES(Distance2Bank, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
-    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
-NVBENCH_BENCH_TYPES(Distance2Copy, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
-    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
-NVBENCH_BENCH(Distance1cusparse);
+// NVBENCH_BENCH_TYPES(Distance1CopyFence, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+//     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
+//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+
+// NVBENCH_BENCH_TYPES(Distance2, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+//     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
+//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+
+// NVBENCH_BENCH_TYPES(Distance2Bank, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+//     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
+//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+
+// NVBENCH_BENCH_TYPES(Distance2Copy, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+//     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
+//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+// NVBENCH_BENCH(Distance1cusparse);
