@@ -18,7 +18,7 @@
 #include "V2/WarpHash.cuh"
 
 
-#define DIST2 0
+#define DIST2 1
 
 void printResult(const apa22_coloring::Counters& sum,
                  const apa22_coloring::Counters& max) {
@@ -37,7 +37,7 @@ void printResult(const apa22_coloring::Counters& sum,
 int main(int argc, char const *argv[]) {
   using namespace apa22_coloring;
 
-  constexpr int MAX_THREADS_SM = 1024;  // Turing (2080ti)
+  constexpr int MAX_THREADS_SM = 512;  // Turing (2080ti)
   constexpr int BLK_SM = 1;
   constexpr int THREADS = MAX_THREADS_SM/BLK_SM;
 
@@ -57,10 +57,10 @@ int main(int argc, char const *argv[]) {
 
   #if DIST2
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D2_SortNet, BLK_SM,
+  Tiling tiling(D2_Warp, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)coloring2SortNetSmall<THREADS, BLK_SM, int>,
+                (void*)D2warp<THREADS, BLK_SM, 16, 3, int, char, 8, 3, int>,
                 -1, true);
   GPUSetupD2 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
@@ -129,16 +129,25 @@ int main(int argc, char const *argv[]) {
   //                                        gpu_setup.d_max1,
   //                                        gpu_setup.d_total2,
   //                                        gpu_setup.d_max2);
-  coloring2SortNetSmall<THREADS, BLK_SM, int>
+  // coloring2SortNetSmall<THREADS, BLK_SM, int>
+  // <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
+  //                                        gpu_setup.d_col_ptr,
+  //                                        gpu_setup.d_tile_boundaries,
+  //                                        gpu_setup.blocks_total1,
+  //                                        gpu_setup.blocks_total2,
+  //                                        gpu_setup.blocks_max1,
+  //                                        gpu_setup.blocks_max2,
+  //                                        gpu_setup.d_total1,
+  //                                        gpu_setup.d_max1,
+  //                                        gpu_setup.d_total2,
+  //                                        gpu_setup.d_max2);
+  D2warp<THREADS, BLK_SM>
   <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
                                          gpu_setup.d_col_ptr,
                                          gpu_setup.d_tile_boundaries,
-                                         gpu_setup.blocks_total1,
+                                         tiling.max_node_degree,
                                          gpu_setup.blocks_total2,
-                                         gpu_setup.blocks_max1,
                                          gpu_setup.blocks_max2,
-                                         gpu_setup.d_total1,
-                                         gpu_setup.d_max1,
                                          gpu_setup.d_total2,
                                          gpu_setup.d_max2);
 #else

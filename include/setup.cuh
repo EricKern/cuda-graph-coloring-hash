@@ -12,6 +12,7 @@ enum Distance {
     D2,
     D2_SortNet,
     D1_Warp,
+    D2_Warp,
 };
 
 class Tiling {
@@ -124,15 +125,42 @@ Tiling::Tiling(Distance dist,
                       &n_tiles,
                       &max_node_degree);
   } else if (dist == D1_Warp) {
-    // we can use only half of the shmem to store the tile because we need
-    // the other half to find dist2 collisions and since the
-    auto calc_tile_size = [](int tile_rows, int tile_cols,
+    const int groups_per_warp = 32 / num_hashes;
+    auto calc_tile_size = [=](int tile_rows, int tile_cols,
                              int max_node_degree) -> int {
 
-      const int groups_per_warp = 32 / num_hashes;
       int row_counters = roundUp(tile_rows, groups_per_warp);
       int smem_collison_counters = row_counters * num_hashes * num_bit_widths;
       return (tile_cols + tile_rows + 1) * sizeof(int) +
+              smem_collison_counters * sizeof(char);
+    };
+    very_simple_tiling(row_ptr,
+                      m_rows,
+                      tile_target_mem,
+                      calc_tile_size,
+                      &tile_boundaries,
+                      &n_tiles,
+                      &max_node_degree);
+  } else if (dist == D2_Warp) {
+    // we can use only half of the shmem to store the tile because we need
+    // the other half to find dist2 collisions
+    const int groups_per_warp = 32 / num_hashes;
+
+    auto calc_tile_size = [=](int tile_rows, int tile_cols,
+                             int max_node_degree) -> int {
+      int row_counters = roundUp(tile_rows, groups_per_warp);
+      int smem_collison_counters = row_counters * num_hashes * num_bit_widths;
+
+      int single_node_mem = roundUp(max_node_degree, 32) + 1;
+      // max_node_degree for column indices and +1 for bank conflict avoidance
+      // and at the same time use for row_ptr value (Is part of sorted list).
+
+      // because computed for each hash simultaneously
+      single_node_mem *= num_hashes;
+      
+      int list_space = single_node_mem * tile_rows;
+
+      return (tile_cols + tile_rows + 1 + list_space) * sizeof(int) + 
               smem_collison_counters * sizeof(char);
     };
     very_simple_tiling(row_ptr,
