@@ -15,9 +15,10 @@
 #include "coloring_counters.cuh"
 #include "cpu_coloring.hpp"
 #include "d2_opt_kernel.cuh"
+#include "V2/WarpHash.cuh"
 
 
-#define DIST2 1
+#define DIST2 0
 
 void printResult(const apa22_coloring::Counters& sum,
                  const apa22_coloring::Counters& max) {
@@ -36,8 +37,8 @@ void printResult(const apa22_coloring::Counters& sum,
 int main(int argc, char const *argv[]) {
   using namespace apa22_coloring;
 
-  constexpr int MAX_THREADS_SM = 1024;  // Turing (2080ti)
-  constexpr int BLK_SM = 2;
+  constexpr int MAX_THREADS_SM = 384;  // Turing (2080ti)
+  constexpr int BLK_SM = 1;
   constexpr int THREADS = MAX_THREADS_SM/BLK_SM;
 
   const char* mat_input = "CurlCurl_4";          //Default value
@@ -67,10 +68,10 @@ int main(int argc, char const *argv[]) {
                        tiling.n_tiles);
   #else
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D1, BLK_SM,
+  Tiling tiling(D1_Warp, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)coloring1coop<THREADS, BLK_SM, int>);
+                (void*)D1warp<THREADS, BLK_SM, num_hashes, 3, int, 8, 3, int>);
   GPUSetupD1 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
                        tiling.tile_boundaries.get(),
@@ -141,29 +142,29 @@ int main(int argc, char const *argv[]) {
                                          gpu_setup.d_total2,
                                          gpu_setup.d_max2);
 #else
-  gridSize.x = get_coop_grid_size((void*)coloring1coop<THREADS, BLK_SM, int>,
-                                  blockSize.x, shMem_bytes);
+  // gridSize.x = get_coop_grid_size((void*)coloring1coop<THREADS, BLK_SM, int>,
+  //                                 blockSize.x, shMem_bytes);
 
-  void *kernelArgs[] = {(void *)&gpu_setup.d_row_ptr,
-                        (void *)&gpu_setup.d_col_ptr,
-                        (void *)&gpu_setup.d_tile_boundaries,
-                        (void *)&tiling.n_tiles,
-                        (void *)&gpu_setup.blocks_total1,
-                        (void *)&gpu_setup.blocks_max1,
-                        (void *)&gpu_setup.d_total1,
-                        (void *)&gpu_setup.d_max1
-                        };
+  // void *kernelArgs[] = {(void *)&gpu_setup.d_row_ptr,
+  //                       (void *)&gpu_setup.d_col_ptr,
+  //                       (void *)&gpu_setup.d_tile_boundaries,
+  //                       (void *)&tiling.n_tiles,
+  //                       (void *)&gpu_setup.blocks_total1,
+  //                       (void *)&gpu_setup.blocks_max1,
+  //                       (void *)&gpu_setup.d_total1,
+  //                       (void *)&gpu_setup.d_max1
+  //                       };
 
-  cudaLaunchCooperativeKernel((void *)coloring1coop<THREADS,BLK_SM, int>, gridSize,
-                              blockSize, kernelArgs, shMem_bytes, NULL);
-  // coloring1Kernel<THREADS, BLK_SM>
-  // <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
-  //                                        gpu_setup.d_col_ptr,
-  //                                        gpu_setup.d_tile_boundaries,
-  //                                        gpu_setup.blocks_total1,
-  //                                        gpu_setup.blocks_max1,
-  //                                        gpu_setup.d_total1,
-  //                                        gpu_setup.d_max1);
+  // cudaLaunchCooperativeKernel((void *)coloring1coop<THREADS,BLK_SM, int>, gridSize,
+  //                             blockSize, kernelArgs, shMem_bytes, NULL);
+  D1warp<THREADS, BLK_SM>
+  <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
+                                         gpu_setup.d_col_ptr,
+                                         gpu_setup.d_tile_boundaries,
+                                         gpu_setup.blocks_total1,
+                                         gpu_setup.blocks_max1,
+                                         gpu_setup.d_total1,
+                                         gpu_setup.d_max1);
 #endif
   cudaDeviceSynchronize();
 

@@ -6,7 +6,7 @@ namespace apa22_coloring {
 //=========================================
 // How many and which hash functions to use
 //=========================================
-static constexpr int num_hashes{15};
+static constexpr int num_hashes{16};
 static constexpr int start_hash{3};
 
 template <typename IndexType>

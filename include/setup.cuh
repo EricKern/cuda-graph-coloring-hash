@@ -10,7 +10,8 @@ namespace apa22_coloring {
 enum Distance {
     D1,
     D2,
-    D2_SortNet
+    D2_SortNet,
+    D1_Warp,
 };
 
 class Tiling {
@@ -114,6 +115,24 @@ Tiling::Tiling(Distance dist,
       int single_node_mem = roundUp(max_node_degree + 1, 32) + 1;
       int additional = single_node_mem * tile_rows;
       return (tile_cols + tile_rows + 1 + additional) * sizeof(int);
+    };
+    very_simple_tiling(row_ptr,
+                      m_rows,
+                      tile_target_mem,
+                      calc_tile_size,
+                      &tile_boundaries,
+                      &n_tiles,
+                      &max_node_degree);
+  } else if (dist == D1_Warp) {
+    // we can use only half of the shmem to store the tile because we need
+    // the other half to find dist2 collisions and since the
+    auto calc_tile_size = [](int tile_rows, int tile_cols,
+                             int max_node_degree) -> int {
+
+      const int groups_per_warp = 32 / num_hashes;
+      int row_counters = roundUp(tile_rows, groups_per_warp);
+      int smem_collison_counters = row_counters * num_hashes * num_bit_widths;
+      return (tile_cols + tile_rows + 1 + smem_collison_counters) * sizeof(int);
     };
     very_simple_tiling(row_ptr,
                       m_rows,
