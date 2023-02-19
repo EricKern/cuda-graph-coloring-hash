@@ -132,7 +132,8 @@ Tiling::Tiling(Distance dist,
       const int groups_per_warp = 32 / num_hashes;
       int row_counters = roundUp(tile_rows, groups_per_warp);
       int smem_collison_counters = row_counters * num_hashes * num_bit_widths;
-      return (tile_cols + tile_rows + 1 + smem_collison_counters) * sizeof(int);
+      return (tile_cols + tile_rows + 1) * sizeof(int) +
+              smem_collison_counters * sizeof(char);
     };
     very_simple_tiling(row_ptr,
                       m_rows,

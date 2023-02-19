@@ -86,6 +86,7 @@ template <int THREADS,
           int N_HASHES = 16,
           int START_HASH = 3,
           typename CountT = int,
+          typename SCountT = char,     // also consider this during tiling
           int N_BITW = 8,
           int START_BITW = 3,
           typename IndexT>
@@ -101,6 +102,8 @@ void D1warp(IndexT* row_ptr,
   static_assert(N_HASHES <= 32, "N_HASHES must be smaller than 32");
   static_assert(THREADS % 32 == 0, "Threads must be a multiple of 32");
   static_assert(std::is_integral_v<CountT>, "Counters must be of integral type");
+  static_assert(std::is_integral_v<SCountT>, "Shorter Counters must be of integral type");
+  static_assert(alignof(SCountT) <= alignof(CountT), "Smaller Counter is not actually smaller");
 
   constexpr int N_THREAD_GROUPS = THREADS / N_HASHES;
   const int Thread_Grp_ID = threadIdx.x / N_HASHES;
@@ -120,7 +123,7 @@ void D1warp(IndexT* row_ptr,
   extern __shared__ IndexT shMem[];
   IndexT* shMemRows = shMem;  // n_tileNodes +1 elements
   IndexT* shMemCols = &shMemRows[n_tileNodes + 1];
-  CountT* shMem_collisions = &shMemCols[n_tileEdges];
+  SCountT* shMem_collisions = reinterpret_cast<SCountT*>(&shMemCols[n_tileEdges]);
   zero_smem(shMem_collisions, ceil_nodes * N_BITW * N_HASHES);
   // syncthreads but we can also sync after Partition2ShMem
 
@@ -134,7 +137,7 @@ void D1warp(IndexT* row_ptr,
     IndexT row_end = shMemRows[i + 1];
 
     const auto row_hash = hash(glob_row, Thread_Hash);
-    CountT reg_collisions[N_BITW]{};
+    SCountT reg_collisions[N_BITW]{};
 
     for (IndexT col_idx = row_begin; col_idx < row_end; ++col_idx) {
       IndexT col = shMemCols[col_idx - shMemRows[0]];
@@ -177,12 +180,14 @@ void D1warp(IndexT* row_ptr,
   for (int i = warp_id; i < N_BITW; i += THREADS / 32) {
     CountT sum_red = 0;
     CountT max_red = 0;
-    CountT* start = &shMem_collisions[ceil_nodes * N_HASHES * i];
+    SCountT* start = &shMem_collisions[ceil_nodes * N_HASHES * i];
 
     for (int warp_chunk = 0; warp_chunk < ceil;
          warp_chunk += 32) {
-      sum_red = cub::Sum{}(sum_red, start[warp_chunk + cub::LaneId()]);
-      max_red = cub::Max{}(max_red, start[warp_chunk + cub::LaneId()]);
+      
+      CountT node_col = static_cast<CountT>(start[warp_chunk + cub::LaneId()]);
+      sum_red = cub::Sum{}(sum_red, node_col);
+      max_red = cub::Max{}(max_red, node_col);
     }
     ShflGroupsDown<N_HASHES>(sum_red, cub::Sum{});
     ShflGroupsDown<N_HASHES>(max_red, cub::Max{});

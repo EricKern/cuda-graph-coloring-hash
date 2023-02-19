@@ -37,7 +37,7 @@ void printResult(const apa22_coloring::Counters& sum,
 int main(int argc, char const *argv[]) {
   using namespace apa22_coloring;
 
-  constexpr int MAX_THREADS_SM = 384;  // Turing (2080ti)
+  constexpr int MAX_THREADS_SM = 1024;  // Turing (2080ti)
   constexpr int BLK_SM = 1;
   constexpr int THREADS = MAX_THREADS_SM/BLK_SM;
 
@@ -71,7 +71,7 @@ int main(int argc, char const *argv[]) {
   Tiling tiling(D1_Warp, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)D1warp<THREADS, BLK_SM, num_hashes, 3, int, 8, 3, int>);
+                (void*)D1warp<THREADS, BLK_SM, 16, 3, int, char, 8, 3, int>);
   GPUSetupD1 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
                        tiling.tile_boundaries.get(),
