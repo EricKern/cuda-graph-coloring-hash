@@ -361,9 +361,9 @@ void coloring2SortNetSmall(IndexT* row_ptr,  // global mem
       // soa has an int array for each hash function.
       // In this array all block reduce results of first counter are stored
       // contiguous followed by the reduce results of the next counter ...
-    #pragma unroll num_bit_widths
-    for (int i = 0; i < num_bit_widths; ++i) {
-      if(threadIdx.x == 0){
+    if(threadIdx.x == 0){
+      #pragma unroll num_bit_widths
+      for (int i = 0; i < num_bit_widths; ++i) {
         const int elem_p_hash_fn = num_bit_widths * gridDim.x;
         //        hash segment         bit_w segment   block value
         //        __________________   _____________   ___________
