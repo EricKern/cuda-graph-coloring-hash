@@ -1,6 +1,8 @@
+#pragma once
 #include <cub/cub.cuh>
 
 #include "coloring_counters.cuh"
+#include "coloring.cuh"
 
 namespace apa22_coloring {
 
@@ -326,13 +328,13 @@ template <int THREADS,
 __global__
 __launch_bounds__(THREADS, BLK_SM)
 void D2warp(IndexT* row_ptr,  // global mem
-                         IndexT* col_ptr,  // global mem
-                         IndexT* tile_boundaries,
-                         int max_node_degree,
-                         Counters::value_type* blocks_total2,
-                         Counters::value_type* blocks_max2,
-                         Counters* d_total2,
-                         Counters* d_max2) {
+            IndexT* col_ptr,  // global mem
+            IndexT* tile_boundaries,
+            int max_node_degree,
+            Counters::value_type* blocks_total2,
+            Counters::value_type* blocks_max2,
+            Counters* d_total2,
+            Counters* d_max2) {
   using HashT = std::uint32_t;
   static_assert(cub::PowerOfTwo<N_HASHES>::VALUE, "N_HASHES must be a power of 2");
   static_assert(N_HASHES <= 32, "N_HASHES must be smaller than 32");
