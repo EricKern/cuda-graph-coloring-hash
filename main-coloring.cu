@@ -87,6 +87,9 @@ int main(int argc, char const *argv[]) {
   std::printf("biggest_tile_edges: %d\n", tiling.biggest_tile_edges);
   std::printf("max nodes in any tile: %d\n", tiling.max_nodes);
   std::printf("max edges in any tile: %d\n", tiling.max_edges);
+  size_t smem_size_part = (tiling.biggest_tile_nodes + tiling.biggest_tile_edges
+        + 1) * sizeof(int);
+  std::printf("Smem Size for Partition: %d\n", smem_size_part);
   std::printf("max node degree: %d\n", tiling.max_node_degree);
   
   // calc shMem

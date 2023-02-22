@@ -6,6 +6,24 @@ namespace apa22_coloring {
 
 namespace cg = cooperative_groups;
 
+__device__ __forceinline__
+void work_distribution(int tiles, int& my_start, int& my_work) {
+  my_work = tiles / gridDim.x;
+  int more_work_blks = tiles % gridDim.x;
+  if (more_work_blks != 0) {
+    if(blockIdx.x < more_work_blks) {
+      my_work +=1;
+    }
+    if (blockIdx.x < more_work_blks)
+      my_start = blockIdx.x * my_work;
+    else {
+      int more_work_group = (more_work_blks) * (my_work+1);
+      int less_work_idx = blockIdx.x - more_work_blks;
+      my_start = more_work_group + less_work_idx * my_work;
+    }
+  }
+}
+
 __host__
 int get_coop_grid_size(void* kernel, int threads, size_t shMem_bytes,
                        bool print=false) {
@@ -57,7 +75,9 @@ void coloring1coop(IndexT* row_ptr,
 
   extern __shared__ IndexT shMem[];
 
-  for(int blk_i = blockIdx.x; blk_i < tiles; blk_i += gridDim.x) {
+  int my_start, my_work;
+  work_distribution(tiles, my_start, my_work);
+  for(int blk_i = my_start; blk_i < my_start+my_work; ++blk_i) {
     const int partNr = blk_i;
     const IndexT part_offset = tile_boundaries[partNr];
     const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
@@ -159,7 +179,9 @@ void coloring2coop(IndexT* row_ptr,  // global mem
   // Since shMemCols is 32 or 64 bit, allignment for HashT which is smaller
   // is fine. Tiling guarantees that shMemWorkspace is enough
 
-  for(int blk_i = blockIdx.x; blk_i < tiles; blk_i += gridDim.x) {
+  int my_start, my_work;
+  work_distribution(tiles, my_start, my_work);
+  for(int blk_i = my_start; blk_i < my_start+my_work; ++blk_i) {
     const int partNr = blk_i;
     const IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
     const int n_tileNodes = tile_boundaries[partNr+1] - part_offset;
@@ -258,7 +280,9 @@ void coloring1coopBase(IndexT* row_ptr,
 
   extern __shared__ IndexT shMem[];
 
-  for(int blk_i = blockIdx.x; blk_i < tiles; blk_i += gridDim.x) {
+  int my_start, my_work;
+  work_distribution(tiles, my_start, my_work);
+  for(int blk_i = my_start; blk_i < my_start+my_work; ++blk_i) {
     const int partNr = blk_i;
     const IndexT part_offset = tile_boundaries[partNr];
     const int n_tileNodes = tile_boundaries[partNr+1] - tile_boundaries[partNr];
@@ -347,7 +371,9 @@ void coloring2coopBase(IndexT* row_ptr,  // global mem
   // Since shMemCols is 32 or 64 bit, allignment for HashT which is smaller
   // is fine. Tiling guarantees that shMemWorkspace is enough
 
-  for(int blk_i = blockIdx.x; blk_i < tiles; blk_i += gridDim.x) {
+  int my_start, my_work;
+  work_distribution(tiles, my_start, my_work);
+  for(int blk_i = my_start; blk_i < my_start+my_work; ++blk_i) {
     const int partNr = blk_i;
     const IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
     const int n_tileNodes = tile_boundaries[partNr+1] - part_offset;

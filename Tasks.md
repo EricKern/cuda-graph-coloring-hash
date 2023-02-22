@@ -95,3 +95,15 @@ Shared memory für dist2 mit sorting network braucht genaue größe der partitio
 - Profile mit reduction
 - Collisions Dist2
 
+# Remaining Feedback Tasks
+- D1_Warp version benchen launch_config
+- D1_Speedup
+
+- D2_Warp version benchen launch_config
+- D2_Speedup
+
+- Wenn Warp version gut dann alle matrizen
+    - Cooperative Launch mit warp version implementieren
+    - Cooperative Launch benchen
+
+- Taileffect messen
