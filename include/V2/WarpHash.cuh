@@ -386,4 +386,160 @@ void D2warp(IndexT* row_ptr,  // global mem
   
 }
 
+
+template<int THREADS,
+         int N_HASHES,
+         int START_HASH,
+         int N_BITW,
+         int START_BITW,
+         typename SCountT,
+         typename IndexT,
+         typename HashT>
+__forceinline__ __device__
+void D2WarpCollisionsConflict(const int n_tileNodes,
+                              const int ceil_nodes,
+                              const IndexT part_offset,
+                              const IndexT* shMemRows,
+                              const IndexT* shMemCols,
+                              HashT* sMem_workspace,
+                              SCountT* shMem_collisions) {
+  constexpr int N_THREAD_GROUPS = THREADS / N_HASHES;
+  const int Thread_Grp_ID = threadIdx.x / N_HASHES;
+  const int Logic_Lane_ID = threadIdx.x % N_HASHES;
+  const int Thread_Hash = Logic_Lane_ID + START_HASH;
+
+  // Local Collisions
+  for (int i = Thread_Grp_ID; i < n_tileNodes; i += N_THREAD_GROUPS) {
+    IndexT glob_row = part_offset + i;
+    IndexT row_begin = shMemRows[i];
+    IndexT row_end = shMemRows[i + 1];
+
+    // In elements from shMemWorkspace pointer
+    const int group_ws_begin = (i + row_begin - shMemRows[0]) * N_HASHES;
+    HashT* group_ws = sMem_workspace + group_ws_begin;
+
+    const int thread_ws_len = row_end - row_begin + 1;
+    HashT* thread_ws = group_ws + Logic_Lane_ID * thread_ws_len;
+
+    thread_ws[0] = __brev(hash(glob_row, Thread_Hash));
+    
+    int j = 1;
+    for (IndexT col_idx = row_begin; col_idx < row_end; ++col_idx) {
+      IndexT col = shMemCols[col_idx - shMemRows[0]];
+      // col_idx - shMemRows[0] transforms global col_idx to shMem index
+      if (__builtin_expect(col != glob_row, true)) {
+        thread_ws[j] = __brev(hash(col, Thread_Hash));
+        ++j;
+      }
+    }
+
+    // sorting network to avoid bank conflicts
+    odd_even_merge_sort(thread_ws, j);
+    // odd_even_merge_sort(thread_ws, j);
+    // insertionSort(thread_ws, j);
+
+
+    #pragma unroll N_BITW
+    for(int counter_idx = 0; counter_idx < N_BITW; ++counter_idx){
+      auto shift_val = START_BITW + counter_idx;
+
+      uint32_t mask = (1u << shift_val) - 1u;
+      int max_so_far = 1;
+      int current = 1;
+
+      auto group_start_hash = __brev(thread_ws[0]);
+      for (auto edge_idx = 1; edge_idx < j; ++edge_idx) {
+        auto next_hash = __brev(thread_ws[edge_idx]);
+
+        if((group_start_hash & mask) == (next_hash & mask)){
+          current += 1;
+        } else {
+          group_start_hash = next_hash;
+
+          max_so_far = (current > max_so_far) ? current : max_so_far;
+          current = 1;
+        }
+      }
+      max_so_far = (current > max_so_far) ? current : max_so_far;
+      
+
+      const int idx = ceil_nodes * N_HASHES * counter_idx +
+                      N_HASHES * i +
+                      Logic_Lane_ID;
+      shMem_collisions[idx] = max_so_far - 1;
+    }
+  }
+}
+
+
+// In this version we accept bank conflicts but hop that we need less
+// shared memory for the workspaces
+template <int THREADS,
+          int BLK_SM,
+          int N_HASHES = 16,
+          int START_HASH = 3,
+          typename CountT = int,
+          typename SCountT = char,     // also consider this during tiling
+          int N_BITW = 8,
+          int START_BITW = 3,
+          typename IndexT>
+__global__
+__launch_bounds__(THREADS, BLK_SM)
+void D2warp_Conflicts(IndexT* row_ptr,  // global mem
+            IndexT* col_ptr,  // global mem
+            IndexT* tile_boundaries,
+            Counters::value_type* blocks_total2,
+            Counters::value_type* blocks_max2,
+            Counters* d_total2,
+            Counters* d_max2) {
+  using HashT = std::uint32_t;
+  static_assert(cub::PowerOfTwo<N_HASHES>::VALUE, "N_HASHES must be a power of 2");
+  static_assert(N_HASHES <= 32, "N_HASHES must be smaller than 32");
+  static_assert(THREADS % 32 == 0, "Threads must be a multiple of 32");
+  static_assert(std::is_integral_v<CountT>, "Counters must be of integral type");
+  static_assert(std::is_integral_v<SCountT>, "Shorter Counters must be of integral type");
+  static_assert(alignof(SCountT) <= alignof(CountT), "Smaller Counter is not actually smaller");
+
+
+  const int partNr = blockIdx.x;
+  const IndexT part_offset = tile_boundaries[partNr];
+  const int n_tileNodes = tile_boundaries[partNr + 1] - tile_boundaries[partNr];
+  const int n_tileEdges = row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
+
+  const int groups_per_warp = 32 / N_HASHES;
+  int ceil_nodes = roundUp(n_tileNodes, groups_per_warp); // tiling knows this
+
+  // tiling knows this as well
+  const int workspace_size = (n_tileNodes + n_tileEdges) * N_HASHES;
+
+  extern __shared__ IndexT shMem[];
+  IndexT* shMemRows = shMem;  // n_tileNodes +1 elements
+  IndexT* shMemCols = &shMemRows[n_tileNodes + 1];
+  HashT* shMemWorkspace = reinterpret_cast<HashT*>(&shMemCols[n_tileEdges]);
+  SCountT* shMem_collisions = reinterpret_cast<SCountT*>(&shMemWorkspace[workspace_size]);
+  zero_smem(shMem_collisions, ceil_nodes * N_BITW * N_HASHES);
+  // syncthreads but we can also sync after Partition2ShMem
+
+  Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr, part_offset,
+                  n_tileNodes);
+
+  D2WarpCollisionsConflict<THREADS, N_HASHES, START_HASH, N_BITW, START_BITW>(
+      n_tileNodes, ceil_nodes, part_offset, shMemRows, shMemCols,
+      shMemWorkspace, shMem_collisions);
+
+  __syncthreads();
+
+  Smem_Reduction<THREADS, N_HASHES, N_BITW>(shMem_collisions,
+                                            ceil_nodes,
+                                            blocks_total2,
+                                            blocks_max2);
+
+  __threadfence();
+  deviceReduction<THREADS>(blocks_total2,
+                           blocks_max2,
+                           d_total2,
+                           d_max2);
+  
+}
+
 }  // namespace apa22_coloring

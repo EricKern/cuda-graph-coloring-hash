@@ -13,6 +13,7 @@ enum Distance {
     D2_SortNet,
     D1_Warp,
     D2_Warp,
+    D2_Warp_small
 };
 
 class Tiling {
@@ -98,7 +99,8 @@ Tiling::Tiling(Distance dist,
     // We need double the amount of shmem because we need memory for workspace
     auto calc_tile_size = [](int tile_rows, int tile_cols,
                              int max_node_degree) -> int {
-      return (tile_cols + tile_rows + 1) * sizeof(int) * 2;
+      int work_space_len = tile_cols + tile_rows;
+      return (tile_cols + tile_rows + 1 + work_space_len) * sizeof(int);
     };
     very_simple_tiling(row_ptr,
                       m_rows,
@@ -159,6 +161,29 @@ Tiling::Tiling(Distance dist,
       single_node_mem *= num_hashes;
       
       int list_space = single_node_mem * tile_rows;
+
+      return (tile_cols + tile_rows + 1 + list_space) * sizeof(int) + 
+              smem_collison_counters * sizeof(char);
+    };
+    very_simple_tiling(row_ptr,
+                      m_rows,
+                      tile_target_mem,
+                      calc_tile_size,
+                      &tile_boundaries,
+                      &n_tiles,
+                      &max_node_degree);
+  } else if (dist == D2_Warp_small) {
+    // we can use only half of the shmem to store the tile because we need
+    // the other half to find dist2 collisions
+    const int groups_per_warp = 32 / num_hashes;
+
+    auto calc_tile_size = [=](int tile_rows, int tile_cols,
+                             int max_node_degree) -> int {
+      int row_counters = roundUp(tile_rows, groups_per_warp);
+      int smem_collison_counters = row_counters * num_hashes * num_bit_widths;
+
+      // workspace to sort neighbors
+      int list_space = (tile_cols + tile_rows) * num_hashes;
 
       return (tile_cols + tile_rows + 1 + list_space) * sizeof(int) + 
               smem_collison_counters * sizeof(char);
