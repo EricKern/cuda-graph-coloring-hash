@@ -37,7 +37,7 @@ void printResult(const apa22_coloring::Counters& sum,
 int main(int argc, char const *argv[]) {
   using namespace apa22_coloring;
 
-  constexpr int MAX_THREADS_SM = 512;  // Turing (2080ti)
+  constexpr int MAX_THREADS_SM = 1024;  // Turing (2080ti)
   constexpr int BLK_SM = 1;
   constexpr int THREADS = MAX_THREADS_SM/BLK_SM;
 
@@ -57,10 +57,10 @@ int main(int argc, char const *argv[]) {
 
   #if DIST2
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D2_Warp, BLK_SM,
+  Tiling tiling(D2_Warp_small, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)D2warp<THREADS, BLK_SM, 16, 3, int, char, 8, 3, int>,
+                (void*)D2warp_Conflicts<THREADS, BLK_SM, 16, 3, int, char, 8, 3, int>,
                 -1, true);
   GPUSetupD2 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
@@ -71,7 +71,7 @@ int main(int argc, char const *argv[]) {
   Tiling tiling(D1_Warp, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)D1warp<THREADS, BLK_SM, 16, 3, int, char, 8, 3, int>);
+                (void*)D1warp<THREADS, BLK_SM, 16, 3, int, char, 8, 3, int>, 64*1024);
   GPUSetupD1 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
                        tiling.tile_boundaries.get(),
@@ -89,7 +89,7 @@ int main(int argc, char const *argv[]) {
   std::printf("max edges in any tile: %d\n", tiling.max_edges);
   size_t smem_size_part = (tiling.biggest_tile_nodes + tiling.biggest_tile_edges
         + 1) * sizeof(int);
-  std::printf("Smem Size for Partition: %d\n", smem_size_part);
+  std::printf("Smem Size for Partition: %ld\n", smem_size_part);
   std::printf("max node degree: %d\n", tiling.max_node_degree);
   
   // calc shMem
@@ -144,11 +144,19 @@ int main(int argc, char const *argv[]) {
   //                                        gpu_setup.d_max1,
   //                                        gpu_setup.d_total2,
   //                                        gpu_setup.d_max2);
-  D2warp<THREADS, BLK_SM>
+  // D2warp<THREADS, BLK_SM>
+  // <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
+  //                                        gpu_setup.d_col_ptr,
+  //                                        gpu_setup.d_tile_boundaries,
+  //                                        tiling.max_node_degree,
+  //                                        gpu_setup.blocks_total2,
+  //                                        gpu_setup.blocks_max2,
+  //                                        gpu_setup.d_total2,
+  //                                        gpu_setup.d_max2);
+  D2warp_Conflicts<THREADS, BLK_SM>
   <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
                                          gpu_setup.d_col_ptr,
                                          gpu_setup.d_tile_boundaries,
-                                         tiling.max_node_degree,
                                          gpu_setup.blocks_total2,
                                          gpu_setup.blocks_max2,
                                          gpu_setup.d_total2,
