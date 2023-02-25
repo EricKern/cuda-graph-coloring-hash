@@ -441,7 +441,7 @@ void D2CollisionsSortNet(IndexT* shMemRows,
                          Counters& max) {
   Counters current_collisions;
 
-  const int mem_per_node = roundUp(max_node_degree + 1, 32) + 1;
+  const int mem_per_node = roundUp(max_node_degree, 32) + 1;
 
   for (int i = threadIdx.x; i < n_tileNodes; i += blockDim.x) {
     IndexT glob_row = part_offset + i;

@@ -7,6 +7,7 @@
 #include "cli_parser.hpp"
 #include "mat_loader.hpp"
 #include "coloring.cuh"
+#include "d1_opt_kernel.cuh"
 #include "coop_launch.cuh"
 #include "setup.cuh"
 #include "asc.cuh"
@@ -22,16 +23,16 @@
 
 void printResult(const apa22_coloring::Counters& sum,
                  const apa22_coloring::Counters& max) {
-    std::printf("Total Collisions\n");
-    const auto start_bw = apa22_coloring::start_bit_width;
-    for (uint i = 0; i < apa22_coloring::num_bit_widths; ++i) {
-      std::printf("Mask width: %d, Collisions: %d\n", i+start_bw, sum.m[i]);
-    }
+  std::printf("Total Collisions\n");
+  const auto start_bw = apa22_coloring::start_bit_width;
+  for (uint i = 0; i < apa22_coloring::num_bit_widths; ++i) {
+    std::printf("Mask width: %d, Collisions: %d\n", i + start_bw, sum.m[i]);
+  }
 
-    std::printf("Max Collisions per Node\n");
-    for (uint i = 0; i < apa22_coloring::num_bit_widths; ++i) {
-      std::printf("Mask width: %d, Collisions: %d\n", i+start_bw, max.m[i]);
-    }
+  std::printf("Max Collisions per Node\n");
+  for (uint i = 0; i < apa22_coloring::num_bit_widths; ++i) {
+    std::printf("Mask width: %d, Collisions: %d\n", i + start_bw, max.m[i]);
+  }
 }
 
 int main(int argc, char const *argv[]) {
@@ -57,21 +58,22 @@ int main(int argc, char const *argv[]) {
 
   #if DIST2
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D2_Warp_small, BLK_SM,
+  Tiling tiling(D2_SortNet, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)D2warp_Conflicts<THREADS, BLK_SM, 16, 3, int, char, 8, 3, int>,
-                -1, true);
+                (void*)coloring2KernelBank<THREADS, BLK_SM, int>,
+                64*1024, true);
   GPUSetupD2 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
                        tiling.tile_boundaries.get(),
                        tiling.n_tiles);
   #else
   MatLoader& mat_loader = MatLoader::getInstance(Mat);
-  Tiling tiling(D1_Warp, BLK_SM,
+  Tiling tiling(D1, BLK_SM,
                 mat_loader.row_ptr,
                 mat_loader.m_rows,
-                (void*)D1warp<THREADS, BLK_SM, 16, 3, int, char, 8, 3, int>, 64*1024);
+                (void*)d1KernelStructRed<THREADS, BLK_SM, int>,
+                64*1024, true);
   GPUSetupD1 gpu_setup(mat_loader.row_ptr,
                        mat_loader.col_ptr,
                        tiling.tile_boundaries.get(),
@@ -119,19 +121,20 @@ int main(int argc, char const *argv[]) {
   // cudaLaunchCooperativeKernel((void *)coloring2coop<THREADS,BLK_SM, int>, gridSize,
   //                             blockSize, kernelArgs, shMem_bytes, NULL);
 
-  // coloring2KernelBank<THREADS, BLK_SM>
-  // <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
-  //                                        gpu_setup.d_col_ptr,
-  //                                        gpu_setup.d_tile_boundaries,
-  //                                        tiling.max_node_degree,
-  //                                        gpu_setup.blocks_total1,
-  //                                        gpu_setup.blocks_total2,
-  //                                        gpu_setup.blocks_max1,
-  //                                        gpu_setup.blocks_max2,
-  //                                        gpu_setup.d_total1,
-  //                                        gpu_setup.d_max1,
-  //                                        gpu_setup.d_total2,
-  //                                        gpu_setup.d_max2);
+  coloring2KernelBank<THREADS, BLK_SM>
+  <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
+                                         gpu_setup.d_col_ptr,
+                                         gpu_setup.d_tile_boundaries,
+                                         tiling.max_node_degree,
+                                         gpu_setup.blocks_total1,
+                                         gpu_setup.blocks_total2,
+                                         gpu_setup.blocks_max1,
+                                         gpu_setup.blocks_max2,
+                                         gpu_setup.d_total1,
+                                         gpu_setup.d_max1,
+                                         gpu_setup.d_total2,
+                                         gpu_setup.d_max2);
+
   // coloring2SortNetSmall<THREADS, BLK_SM, int>
   // <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
   //                                        gpu_setup.d_col_ptr,
@@ -153,14 +156,14 @@ int main(int argc, char const *argv[]) {
   //                                        gpu_setup.blocks_max2,
   //                                        gpu_setup.d_total2,
   //                                        gpu_setup.d_max2);
-  D2warp_Conflicts<THREADS, BLK_SM>
-  <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
-                                         gpu_setup.d_col_ptr,
-                                         gpu_setup.d_tile_boundaries,
-                                         gpu_setup.blocks_total2,
-                                         gpu_setup.blocks_max2,
-                                         gpu_setup.d_total2,
-                                         gpu_setup.d_max2);
+  // D2warp_Conflicts<THREADS, BLK_SM>
+  // <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
+  //                                        gpu_setup.d_col_ptr,
+  //                                        gpu_setup.d_tile_boundaries,
+  //                                        gpu_setup.blocks_total2,
+  //                                        gpu_setup.blocks_max2,
+  //                                        gpu_setup.d_total2,
+  //                                        gpu_setup.d_max2);
 #else
   // gridSize.x = get_coop_grid_size((void*)coloring1coop<THREADS, BLK_SM, int>,
   //                                 blockSize.x, shMem_bytes);
@@ -177,7 +180,15 @@ int main(int argc, char const *argv[]) {
 
   // cudaLaunchCooperativeKernel((void *)coloring1coop<THREADS,BLK_SM, int>, gridSize,
   //                             blockSize, kernelArgs, shMem_bytes, NULL);
-  D1warp<THREADS, BLK_SM>
+  // D1warp<THREADS, BLK_SM>
+  // <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
+  //                                        gpu_setup.d_col_ptr,
+  //                                        gpu_setup.d_tile_boundaries,
+  //                                        gpu_setup.blocks_total1,
+  //                                        gpu_setup.blocks_max1,
+  //                                        gpu_setup.d_total1,
+  //                                        gpu_setup.d_max1);
+  d1KernelStructRed<THREADS, BLK_SM>
   <<<gridSize, blockSize, shMem_bytes>>>(gpu_setup.d_row_ptr,
                                          gpu_setup.d_col_ptr,
                                          gpu_setup.d_tile_boundaries,

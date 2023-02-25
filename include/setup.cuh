@@ -115,7 +115,7 @@ Tiling::Tiling(Distance dist,
     auto calc_tile_size = [](int tile_rows, int tile_cols,
                              int max_node_degree) -> int {
 
-      int single_node_mem = roundUp(max_node_degree + 1, 32) + 1;
+      int single_node_mem = roundUp(max_node_degree, 32) + 1;
       int additional = single_node_mem * tile_rows;
       return (tile_cols + tile_rows + 1 + additional) * sizeof(int);
     };
