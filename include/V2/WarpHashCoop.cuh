@@ -141,3 +141,87 @@ void coloring1coopWarp(IndexT* row_ptr,
                                   temp_storage);
     }
 }
+
+template <int THREADS,
+          int BLK_SM,
+          int N_HASHES = 16,
+          int START_HASH = 3,
+          typename CountT = int,
+          typename SCountT = char,     // also consider this during tiling
+          int N_BITW = 8,
+          int START_BITW = 3,
+          typename IndexT>
+__global__
+__launch_bounds__(THREADS, BLK_SM)
+void coloring2coopWarp(IndexT* row_ptr,  // global mem
+                   IndexT* col_ptr,  // global mem
+                   IndexT* tile_boundaries,
+                   int tiles,
+                   int max_node_degree,
+                   Counters::value_type* blocks_total1,
+                   Counters::value_type* blocks_max1,
+                   Counters::value_type* blocks_total2,
+                   Counters::value_type* blocks_max2,
+                   Counters* d_total1,
+                   Counters* d_max1,
+                   Counters* d_total2,
+                   Counters* d_max2) {
+  using HashT = std::uint32_t;
+
+  // __shared__ Counters coop_total2[num_hashes];
+  // __shared__ Counters coop_max2[num_hashes];
+  // init_counters(coop_total2, coop_max2);
+
+  // shared mem size: 2 * (n_rows + 1 + n_cols)
+  extern __shared__ IndexT shMem[];
+  const int groups_per_warp = 32 / N_HASHES;
+  const int single_node_list_elems = (roundUp(max_node_degree, 32) + 1) * N_HASHES;
+
+  int my_start, my_work;
+  work_distribution(tiles, my_start, my_work);
+  for(int blk_i = my_start; blk_i < my_start+my_work; ++blk_i) {
+    const int partNr = blk_i;
+    const IndexT part_offset = tile_boundaries[partNr];   // offset in row_ptr array
+    const int n_tileNodes = tile_boundaries[partNr+1] - part_offset;
+    const int n_tileEdges = row_ptr[n_tileNodes + part_offset] - row_ptr[part_offset];
+    const int ceil_nodes = roundUp(n_tileNodes, groups_per_warp);
+  
+    const int list_space = single_node_list_elems * n_tileNodes;
+
+    IndexT* shMemRows = shMem;  // n_tileNodes +1 elements
+    IndexT* shMemCols = &shMemRows[n_tileNodes + 1];
+    HashT* shMemWorkspace = reinterpret_cast<HashT*>(&shMemCols[n_tileEdges]);
+    SCountT* shMem_collisions = reinterpret_cast<SCountT*>(&shMemWorkspace[list_space]);
+    zero_smem(shMem_collisions, ceil_nodes * N_BITW * N_HASHES);
+
+    Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr,
+                    part_offset, n_tileNodes);
+  
+    D2WarpCollisions<THREADS, N_HASHES, START_HASH, N_BITW, START_BITW>(
+      n_tileNodes, ceil_nodes, max_node_degree, part_offset, shMemRows,
+      shMemCols, shMemWorkspace, shMem_collisions);
+    cg::this_thread_block().sync();
+
+    Smem_ReductionCoop<THREADS, N_HASHES, N_BITW>(shMem_collisions,
+                                            ceil_nodes, tiles, blk_i,
+                                            blocks_total2,
+                                            blocks_max2);
+    cg::this_thread_block().sync();
+
+  } // blk_i
+
+  cg::this_grid().sync();
+
+  // The last block reduces the results of all other blocks
+
+  typedef cub::BlockReduce<CountT, THREADS> BlockReduceT;
+  __shared__ typename BlockReduceT::TempStorage temp_storage;
+  // auto& temp_storage =
+  //     reinterpret_cast<typename BlockReduceT::TempStorage&>(shMem);
+  if (blockIdx.x == 0) {
+    LastReduction<BlockReduceT>(blocks_total2, d_total2, tiles,
+                                    cub::Sum{}, temp_storage);
+    LastReduction<BlockReduceT>(blocks_max2, d_max2, tiles, cub::Max{},
+                                    temp_storage);
+  }
+}
