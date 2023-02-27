@@ -4,6 +4,7 @@
 #include "coloring_counters.cuh"
 #include "coloring.cuh"
 #include "coop_launch.cuh"
+#include "WarpHash.cuh"
 
 using namespace apa22_coloring;
 
@@ -66,7 +67,7 @@ template <int THREADS,
           typename IndexT>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
-void coloring1coopWarpV2(IndexT* row_ptr,
+void coloring1coopWarp(IndexT* row_ptr,
                    IndexT* col_ptr,
                    IndexT* tile_boundaries,   // gridDim.x + 1 elements
                    int tiles,
@@ -191,8 +192,8 @@ void coloring2coopWarp(IndexT* row_ptr,  // global mem
     Partition2ShMem(shMemRows, shMemCols, row_ptr, col_ptr,
                     part_offset, n_tileNodes);
   
-    D2WarpCollisions<THREADS, N_HASHES, START_HASH, N_BITW, START_BITW>(
-      n_tileNodes, ceil_nodes, max_node_degree, part_offset, shMemRows,
+    D2WarpCollisionsConflict<THREADS, N_HASHES, START_HASH, N_BITW, START_BITW>(
+      n_tileNodes, ceil_nodes, part_offset, shMemRows,
       shMemCols, shMemWorkspace, shMem_collisions);
     
     cg::this_thread_block().sync();
