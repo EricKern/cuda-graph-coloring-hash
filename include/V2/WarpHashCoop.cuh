@@ -36,12 +36,9 @@ void Smem_ReductionCoop(SCountT* shMem_collisions,
     ShflGroupsDown<N_HASHES>(max_red, cub::Max{});
 
     if (cub::LaneId() < N_HASHES) {
-      const int elem_p_hash_fn = N_BITW * tiles;
-      //        hash segment                     bit_w segment   block value
-      //        ______________________________   _____________   ___________
-      int idx = cub::LaneId() * elem_p_hash_fn + i * tiles + blk_i;
-      blocks_total1[idx] = sum_red;
-      blocks_max1[idx] = max_red;
+      int idx = cub::LaneId() * N_HASHES + i;
+      blocks_total1[idx] = cub::Sum{}(sum_red, blocks_total1[idx]);
+      blocks_max1[idx] = cub::Max{}(max_red, blocks_max1[idx]);
     }
   }
 }
@@ -58,7 +55,6 @@ void init_countersCoop(CountT* arr1, CountT* arr2) {
   cg::this_thread_block().sync();
 }
 
-
 template <int THREADS,
           int BLK_SM,
           int N_HASHES = 16,
@@ -70,7 +66,7 @@ template <int THREADS,
           typename IndexT>
 __global__
 __launch_bounds__(THREADS, BLK_SM)
-void coloring1coopWarp(IndexT* row_ptr,
+void coloring1coopWarpV2(IndexT* row_ptr,
                    IndexT* col_ptr,
                    IndexT* tile_boundaries,   // gridDim.x + 1 elements
                    int tiles,
@@ -79,9 +75,9 @@ void coloring1coopWarp(IndexT* row_ptr,
                    Counters* d_total,
                    Counters* d_max) {
 
-    // __shared__ CountT coop_total1[num_hashes * N_BITW];
-    // __shared__ CountT coop_max1[num_hashes * N_BITW];
-    // init_countersCoop<CountT, N_HASHES, N_BITW>(coop_total1, coop_max1);
+    __shared__ CountT coop_total1[N_HASHES * N_BITW];
+    __shared__ CountT coop_max1[N_HASHES * N_BITW];
+    init_countersCoop<CountT, N_HASHES, N_BITW>(coop_total1, coop_max1);
 
     extern __shared__ IndexT shMem[];
 
@@ -111,36 +107,34 @@ void coloring1coopWarp(IndexT* row_ptr,
 
         Smem_ReductionCoop<THREADS, N_HASHES, N_BITW>(shMem_collisions,
                                             ceil_nodes, tiles, blk_i,
-                                            blocks_total1,
-                                            blocks_max1);
+                                            coop_total1,
+                                            coop_max1);
         cg::this_thread_block().sync();
     }
-    // // write to gloal memory
-    // const int warp_id = threadIdx.x / 32;
-    // for (int i = warp_id; i < N_BITW; i += THREADS / 32) {
-    //     if (cub::LaneId() < N_HASHES) {
-    //         const int elem_p_hash_fn = N_BITW * gridDim.x;
-    //         //        hash segment                     bit_w segment   block value
-    //         //        ______________________________   _____________   ___________
-    //         int idx = cub::LaneId() * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
-    //         blocks_total1[idx] = coop_total1[idx];
-    //         blocks_max1[idx] = coop_max1[idx];
-    //     }
-    // }
+    //write to gloal memory
+    const int warp_id = threadIdx.x / 32;
+    for (int i = warp_id; i < N_BITW; i += THREADS / 32) {
+        if (cub::LaneId() < N_HASHES) {
+            const int elem_p_hash_fn = N_BITW * gridDim.x;
+            int idx = cub::LaneId() * N_HASHES + i;
+            int idxOut = cub::LaneId() * elem_p_hash_fn + i * gridDim.x + blockIdx.x; 
+            blocks_total1[idxOut] = coop_total1[idx];
+            blocks_max1[idxOut] = coop_max1[idx];
+        }
+    }
     cg::this_grid().sync();
 
     typedef cub::BlockReduce<CountT, THREADS> BlockReduceT;
-    __shared__ typename BlockReduceT::TempStorage temp_storage;
-    // auto& temp_storage_last =
-    //   reinterpret_cast<typename BlockReduceTLast::TempStorage&>(shMem);
+    auto& temp_storage = reinterpret_cast<typename BlockReduceT::TempStorage&>(shMem);
     // The last block reduces the results of all other blocks
     if (blockIdx.x == 0) {
-      LastReduction<BlockReduceT>(blocks_total1, d_total, tiles, cub::Sum{},
+      LastReduction<BlockReduceT>(blocks_total1, d_total, gridDim.x, cub::Sum{},
                                   temp_storage);
-      LastReduction<BlockReduceT>(blocks_max1, d_max, tiles, cub::Max{},
+      LastReduction<BlockReduceT>(blocks_max1, d_max, gridDim.x, cub::Max{},
                                   temp_storage);
     }
 }
+
 
 template <int THREADS,
           int BLK_SM,
@@ -168,9 +162,9 @@ void coloring2coopWarp(IndexT* row_ptr,  // global mem
                    Counters* d_max2) {
   using HashT = std::uint32_t;
 
-  // __shared__ Counters coop_total2[num_hashes];
-  // __shared__ Counters coop_max2[num_hashes];
-  // init_counters(coop_total2, coop_max2);
+  __shared__ CountT coop_total2[N_BITW * N_HASHES];
+  __shared__ CountT coop_max2[N_BITW * N_HASHES];
+  init_countersCoop<CountT, N_HASHES, N_BITW>(coop_total2, coop_max2);
 
   // shared mem size: 2 * (n_rows + 1 + n_cols)
   extern __shared__ IndexT shMem[];
@@ -200,28 +194,40 @@ void coloring2coopWarp(IndexT* row_ptr,  // global mem
     D2WarpCollisions<THREADS, N_HASHES, START_HASH, N_BITW, START_BITW>(
       n_tileNodes, ceil_nodes, max_node_degree, part_offset, shMemRows,
       shMemCols, shMemWorkspace, shMem_collisions);
+    
     cg::this_thread_block().sync();
 
     Smem_ReductionCoop<THREADS, N_HASHES, N_BITW>(shMem_collisions,
                                             ceil_nodes, tiles, blk_i,
-                                            blocks_total2,
-                                            blocks_max2);
+                                            coop_total2,
+                                            coop_max2);
     cg::this_thread_block().sync();
 
   } // blk_i
+
+  //write to gloal memory
+  const int warp_id = threadIdx.x / 32;
+  for (int i = warp_id; i < N_BITW; i += THREADS / 32) {
+      if (cub::LaneId() < N_HASHES) {
+          const int elem_p_hash_fn = N_BITW * gridDim.x;
+          int idx = cub::LaneId() * N_HASHES + i;
+          int idxOut = cub::LaneId() * elem_p_hash_fn + i * gridDim.x + blockIdx.x; 
+          blocks_total2[idxOut] = coop_total2[idx];
+          blocks_max2[idxOut] = coop_max2[idx];
+      }
+  }
 
   cg::this_grid().sync();
 
   // The last block reduces the results of all other blocks
 
   typedef cub::BlockReduce<CountT, THREADS> BlockReduceT;
-  __shared__ typename BlockReduceT::TempStorage temp_storage;
-  // auto& temp_storage =
-  //     reinterpret_cast<typename BlockReduceT::TempStorage&>(shMem);
+  auto& temp_storage =
+      reinterpret_cast<typename BlockReduceT::TempStorage&>(shMem);
   if (blockIdx.x == 0) {
-    LastReduction<BlockReduceT>(blocks_total2, d_total2, tiles,
+    LastReduction<BlockReduceT>(blocks_total2, d_total2, gridDim.x,
                                     cub::Sum{}, temp_storage);
-    LastReduction<BlockReduceT>(blocks_max2, d_max2, tiles, cub::Max{},
+    LastReduction<BlockReduceT>(blocks_max2, d_max2, gridDim.x, cub::Max{},
                                     temp_storage);
   }
 }
