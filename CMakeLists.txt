@@ -4,7 +4,6 @@ set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# set(CMAKE_CUDA_ARCHITECTURES "61;75")
 set(CMAKE_CUDA_ARCHITECTURES "75")
 
 project(graph-coloring VERSION 1.0 LANGUAGES CXX CUDA
@@ -22,30 +21,21 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-# enable_testing()
-# add_subdirectory(tests)
+enable_testing()
+add_subdirectory(tests)
 # google test end =======================================
 
-# find_package(nvbench)
-add_subdirectory(nvbench)
+find_package(nvbench)
 
 
 add_subdirectory(tiling)
 add_subdirectory(cpumultiply)
 add_subdirectory(benchmark)
 
-set(Target1Name main-coloring.out)
-add_executable(${Target1Name} main-coloring.cu)
-target_compile_options(${Target1Name} PRIVATE "$<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-G;-src-in-ptx;-Xptxas;-v>")
-target_compile_options(${Target1Name} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
-target_include_directories(${Target1Name} PRIVATE "${PROJECT_SOURCE_DIR}/include")
-target_compile_features(${Target1Name} PRIVATE cuda_std_17)
-target_link_libraries(${Target1Name} PRIVATE cusparse tiling cpumultiply)
-
-
-
-# set(tiling_test tiling_test.out)
-# add_executable(${tiling_test} my_tiling/tiling_test.cpp)
-# target_include_directories(${tiling_test} PRIVATE ${PROJECT_SOURCE_DIR}/include)
-# target_link_libraries(${tiling_test} PRIVATE tiling cpumultiply)
-# set_target_properties(${tiling_test} PROPERTIES COMPILE_FEATURES cuda_std_17)
+set(example example.out)
+add_executable(${example} example.cu)
+target_compile_options(${example} PRIVATE "$<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-G;-src-in-ptx;-Xptxas;-v>")
+target_compile_options(${example} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
+target_include_directories(${example} PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/tests)
+target_compile_features(${example} PRIVATE cuda_std_17)
+target_link_libraries(${example} PRIVATE tiling cpumultiply)

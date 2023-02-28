@@ -9,7 +9,7 @@
 #include "bench_util.cuh"
 
 void D1Coop(nvbench::state& state) {
-    constexpr int THREADS = 384;
+    constexpr int THREADS = 1024;
     constexpr int BLK_SM = 1;
     auto kernel = coloring1coopWarp<THREADS, BLK_SM, 16, 3, int, char, 8, 3, int>;
 
@@ -61,7 +61,7 @@ void D1Coop(nvbench::state& state) {
 
 
 void D2Coop(nvbench::state& state) {
-    constexpr int THREADS = 384;
+    constexpr int THREADS = 1024;
     constexpr int BLK_SM = 1;
     auto kernel = coloring2coopWarp<THREADS, BLK_SM, 16, 3, int, char, 8, 3, int>;
 
@@ -116,5 +116,5 @@ void D2Coop(nvbench::state& state) {
 }
 
 
-//NVBENCH_BENCH(D1Coop);
+NVBENCH_BENCH(D1Coop);
 NVBENCH_BENCH(D2Coop);

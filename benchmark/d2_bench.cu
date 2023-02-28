@@ -281,25 +281,25 @@ void D2Warp_Small_Mapping(nvbench::state& state,
   });
 }
 
-// NVBENCH_BENCH_TYPES(Dist1, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-//     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
-//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+NVBENCH_BENCH_TYPES(Dist1, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
+    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
 
-// NVBENCH_BENCH_TYPES(Dist2ThrustSrt, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-//     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
-//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+NVBENCH_BENCH_TYPES(Dist2ThrustSrt, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
+    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
     
-// NVBENCH_BENCH_TYPES(Dist2Banks, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-//     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
-//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+NVBENCH_BENCH_TYPES(Dist2Banks, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
+    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
 
 NVBENCH_BENCH_TYPES(Dist2SmallSnet, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
 
-// NVBENCH_BENCH_TYPES(Dist2, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
-//     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
-//     .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
+NVBENCH_BENCH_TYPES(Dist2, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
+    .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
+    .add_int64_axis(SM_ShMem_key, SM_ShMem_range);
     
 NVBENCH_BENCH_TYPES(D2WarpMapping, NVBENCH_TYPE_AXES(THREADS_SM, BLOCKS_SM))
     .set_type_axes_names({Threads_SM_key, Blocks_SM_key})
