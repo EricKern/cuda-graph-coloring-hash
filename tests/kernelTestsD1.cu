@@ -5,7 +5,7 @@
 #include "setup.cuh"
 #include "d1_opt_kernel.cuh"
 #include "coop_launch.cuh"
-#include "V2/WarpHash.cuh"
+#include "V2/warp_hash.cuh"
 
 namespace {
 using namespace apa22_coloring;

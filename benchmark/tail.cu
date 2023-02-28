@@ -4,8 +4,8 @@
 #include <iostream>
 #include <vector>
 
-#include "V2/WarpHashCoop.cuh"
-#include "V2/WarpHashCoopTime.cuh"
+#include "V2/warp_hash_coop.cuh"
+#include "V2/warp_hash_coop_tail.cuh"
 #include "defines.hpp"
 #include "coloring_counters.cuh"
 #include "setup.cuh"

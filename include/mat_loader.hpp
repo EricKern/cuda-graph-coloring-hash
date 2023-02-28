@@ -1,12 +1,13 @@
 #pragma once
 #include "cpumultiply.hpp"  //! header file for tiling
+#include "defines.hpp"
 
 namespace apa22_coloring {
 // Singleton class so we load matrix only once
 // consequentially we can only have only one matrix loaded at a time
 class MatLoader {
  public:
-  static MatLoader& getInstance(const char* path = "/mnt/matrix_store/MM/Bodendiek/CurlCurl_4/CurlCurl_4.mtx") {
+  static MatLoader& getInstance(const char* path = def::CurlCurl_4) {
     static MatLoader Instance(path);
 
     return Instance;

@@ -9,7 +9,7 @@
 
 #include "d1_opt_kernel.cuh"  // for dist1 struct reduction
 #include "d2_opt_kernel.cuh"
-#include "V2/WarpHash.cuh"
+#include "V2/warp_hash.cuh"
 
 using namespace apa22_coloring;
 

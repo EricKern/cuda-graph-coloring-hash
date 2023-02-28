@@ -6,7 +6,7 @@
 
 #include "hash.cuh"
 #include "coloring_counters.cuh"
-#include "odd_even_sort.hpp"
+#include "sort_algorithms.hpp"
 #include "util.cuh"
 
 
@@ -262,7 +262,6 @@ void D2CollisionsLocal(IndexT* shMemRows,
       }
     }
 
-    // thrust::sort(thrust::seq, thread_ws, thread_ws + j);
     insertionSort(thread_ws, j);
 
     // We define node collisions at dist 2 as maximum number of equal patterns
@@ -358,28 +357,19 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
 
   #pragma unroll num_hashes
   for (int k = 0; k < num_hashes; ++k) {
-    // Counters total1, max1;
     Counters total2, max2;
-    // D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
-    //                   total1, max1);
     D2CollisionsLocal(shMemRows, shMemCols, shMemWorkspace, n_tileNodes,
                       part_offset, start_hash + k, total2, max2);
-      // Counters l1_sum1 = BlockReduceT(temp_storage)
-      //                  .Reduce(total1.m[i], cub::Sum{});
-      // cg::this_thread_block().sync();
-      // Counters l1_max1 = BlockReduceT(temp_storage)
-      //                  .Reduce(max1.m[i], cub::Max{});
-      // cg::this_thread_block().sync();
-      Counters l1_sum2 = BlockReduceT(temp_storage)
-                       .Reduce(total2, Sum_Counters{});
-      cg::this_thread_block().sync();
-      Counters l1_max2 = BlockReduceT(temp_storage)
-                       .Reduce(max2, Max_Counters{});
-      cg::this_thread_block().sync();
+    Counters l1_sum2 = BlockReduceT(temp_storage)
+                      .Reduce(total2, Sum_Counters{});
+    cg::this_thread_block().sync();
+    Counters l1_max2 = BlockReduceT(temp_storage)
+                      .Reduce(max2, Max_Counters{});
+    cg::this_thread_block().sync();
 
-      // soa has an int array for each hash function.
-      // In this array all block reduce results of first counter are stored
-      // contiguous followed by the reduce results of the next counter ...
+    // soa has an int array for each hash function.
+    // In this array all block reduce results of first counter are stored
+    // contiguous followed by the reduce results of the next counter ...
     #pragma unroll num_bit_widths
     for (int i = 0; i < num_bit_widths; ++i) {
       if(threadIdx.x == 0){
@@ -387,8 +377,6 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
         //        hash segment         bit_w segment   block value
         //        __________________   _____________   ___________
         int idx = k * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
-        // blocks_total1[idx] = l1_sum1;
-        // blocks_max1[idx] = l1_max1;
         blocks_total2[idx] = l1_sum2.m[i];
         blocks_max2[idx] = l1_max2.m[i];
       }
@@ -410,8 +398,6 @@ void coloring2Kernel(IndexT* row_ptr,  // global mem
 
   // The last block reduces the results of all other blocks
   if (amLast) {
-    // LastReduction<BlockReduceT>(blocks_total1, d_total1, gridDim.x, cub::Sum{}, temp_storage);
-    // LastReduction<BlockReduceT>(blocks_max1, d_max1, gridDim.x, cub::Max{}, temp_storage);
     auto& temp_storage_last =
         reinterpret_cast<typename BlockReduceTLast::TempStorage&>(temp_storage);
     LastReduction<BlockReduceTLast>(blocks_total2, d_total2, gridDim.x,
@@ -449,8 +435,6 @@ void D2CollisionsSortNet(IndexT* shMemRows,
 		IndexT row_end = shMemRows[i + 1];
 
     const int thread_ws_begin = i * mem_per_node;
-    // const int thread_ws_end = i + row_end - shMemRows[0];
-    // const int thread_ws_len = thread_ws_end - thread_ws_begin;
 
     WorkspaceT* thread_ws = shMemWorkspace + thread_ws_begin;
 
@@ -567,29 +551,20 @@ void coloring2KernelBank(IndexT* row_ptr,  // global mem
 
   #pragma unroll num_hashes
   for (int k = 0; k < num_hashes; ++k) {
-    // Counters total1, max1;
     Counters total2, max2;
-    // D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
-    //                   total1, max1);
     D2CollisionsSortNet(shMemRows, shMemCols, shMemWorkspace,
                           max_node_degree, n_tileNodes, part_offset,
                           start_hash + k, total2, max2);
-      // Counters l1_sum1 = BlockReduceT(temp_storage)
-      //                  .Reduce(total1.m[i], cub::Sum{});
-      // cg::this_thread_block().sync();
-      // Counters l1_max1 = BlockReduceT(temp_storage)
-      //                  .Reduce(max1.m[i], cub::Max{});
-      // cg::this_thread_block().sync();
-      Counters l1_sum2 = BlockReduceT(temp_storage)
-                       .Reduce(total2, Sum_Counters{});
-      cg::this_thread_block().sync();
-      Counters l1_max2 = BlockReduceT(temp_storage)
-                       .Reduce(max2, Max_Counters{});
-      cg::this_thread_block().sync();
+    Counters l1_sum2 = BlockReduceT(temp_storage)
+                      .Reduce(total2, Sum_Counters{});
+    cg::this_thread_block().sync();
+    Counters l1_max2 = BlockReduceT(temp_storage)
+                      .Reduce(max2, Max_Counters{});
+    cg::this_thread_block().sync();
 
-      // soa has an int array for each hash function.
-      // In this array all block reduce results of first counter are stored
-      // contiguous followed by the reduce results of the next counter ...
+    // soa has an int array for each hash function.
+    // In this array all block reduce results of first counter are stored
+    // contiguous followed by the reduce results of the next counter ...
     #pragma unroll num_bit_widths
     for (int i = 0; i < num_bit_widths; ++i) {
       if(threadIdx.x == 0){
@@ -597,8 +572,6 @@ void coloring2KernelBank(IndexT* row_ptr,  // global mem
         //        hash segment         bit_w segment   block value
         //        __________________   _____________   ___________
         int idx = k * elem_p_hash_fn + i * gridDim.x + blockIdx.x;
-        // blocks_total1[idx] = l1_sum1.m[i];
-        // blocks_max1[idx] = l1_max1.m[i];
         blocks_total2[idx] = l1_sum2.m[i];
         blocks_max2[idx] = l1_max2.m[i];
       }
@@ -621,9 +594,6 @@ void coloring2KernelBank(IndexT* row_ptr,  // global mem
       reinterpret_cast<typename BlockReduceTLast::TempStorage&>(temp_storage);
   // The last block reduces the results of all other blocks
   if (amLast) {
-    // LastReduction<BlockReduceT>(blocks_total1, d_total1, gridDim.x, cub::Sum{}, temp_storage);
-    // LastReduction<BlockReduceT>(blocks_max1, d_max1, gridDim.x, cub::Max{}, temp_storage);
-
     LastReduction<BlockReduceTLast>(blocks_total2, d_total2, gridDim.x,
                                     cub::Sum{}, temp_storage_last);
     LastReduction<BlockReduceTLast>(blocks_max2, d_max2, gridDim.x,

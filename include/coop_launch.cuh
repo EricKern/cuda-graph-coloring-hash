@@ -103,10 +103,10 @@ void coloring1coop(IndexT* row_ptr,
                             .Reduce(max_collisions, Max_Counters{});
       cg::this_thread_block().sync();
 
-        // block_total* holds mem for all intermediate results of each block.
-        // In this array all block reduce results of first counter are stored
-        // contiguous followed by the reduce results of the next counter ...
-        // Results for each hash function are stored after each other.
+      // block_total* holds mem for all intermediate results of each block.
+      // In this array all block reduce results of first counter are stored
+      // contiguous followed by the reduce results of the next counter ...
+      // Results for each hash function are stored after each other.
       #pragma unroll num_bit_widths
       for (int i = 0; i < num_bit_widths; ++i) {
         if(threadIdx.x == 0){
@@ -197,16 +197,9 @@ void coloring2coop(IndexT* row_ptr,  // global mem
     for (int k = 0; k < num_hashes; ++k) {
       // Counters total1, max1;
       Counters total2, max2;
-      // D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
-      //                   total1, max1);
       D2CollisionsLocalSNetSmall(shMemRows, shMemCols, shMemWorkspace, n_tileNodes,
                       part_offset, start_hash + k, total2, max2);
-      // CountT l1_sum1 = BlockReduceT(temp_storage)
-      //                  .Reduce(total1.m[i], cub::Sum{});
-      // cg::this_thread_block().sync();
-      // CountT l1_max1 = BlockReduceT(temp_storage)
-      //                  .Reduce(max1.m[i], cub::Max{});
-      // cg::this_thread_block().sync();
+
       Counters l1_sum2 = BlockReduceT(temp_storage)
                       .Reduce(total2, Sum_Counters{});
       cg::this_thread_block().sync();
@@ -216,8 +209,6 @@ void coloring2coop(IndexT* row_ptr,  // global mem
       #pragma unroll num_bit_widths
       for (int i = 0; i < num_bit_widths; ++i) {
         if(threadIdx.x == 0){
-          // blocks_total1[idx] = l1_sum1;
-          // blocks_max1[idx] = l1_max1;
           coop_total2[k].m[i] = cub::Sum{}(l1_sum2.m[i], coop_total2[k].m[i]);
           coop_max2[k].m[i] = cub::Max{}(l1_max2.m[i], coop_max2[k].m[i]);
         }
@@ -243,7 +234,6 @@ void coloring2coop(IndexT* row_ptr,  // global mem
   cg::this_grid().sync();
 
   // The last block reduces the results of all other blocks
-
   auto& temp_storage_last =
       reinterpret_cast<typename BlockReduceTLast::TempStorage&>(temp_storage);
   if (blockIdx.x == 0) {
@@ -254,9 +244,9 @@ void coloring2coop(IndexT* row_ptr,  // global mem
   }
 }
 
-// =====================================================
-// Base version built to Coop Launchs
-// =====================================================
+// ============================================================
+// Base versions naively ported to run with cooperative launch
+// ============================================================
 
 template <int THREADS,
           int BLK_SM,
@@ -308,10 +298,10 @@ void coloring1coopBase(IndexT* row_ptr,
                             .Reduce(max_collisions, Max_Counters{});
       cg::this_thread_block().sync();
 
-        // block_total* holds mem for all intermediate results of each block.
-        // In this array all block reduce results of first counter are stored
-        // contiguous followed by the reduce results of the next counter ...
-        // Results for each hash function are stored after each other.
+      // block_total* holds mem for all intermediate results of each block.
+      // In this array all block reduce results of first counter are stored
+      // contiguous followed by the reduce results of the next counter ...
+      // Results for each hash function are stored after each other.
       if(threadIdx.x == 0) {
         #pragma unroll num_bit_widths
         for (int i = 0; i < num_bit_widths; ++i) {
@@ -387,18 +377,10 @@ void coloring2coopBase(IndexT* row_ptr,  // global mem
 
     #pragma unroll num_hashes
     for (int k = 0; k < num_hashes; ++k) {
-      // Counters total1, max1;
       Counters total2, max2;
-      // D1CollisionsLocal(shMemRows, shMemCols, tile_boundaries, start_hash + k,
-      //                   total1, max1);
       D2CollisionsLocalSNetSmall(shMemRows, shMemCols, shMemWorkspace, n_tileNodes,
                       part_offset, start_hash + k, total2, max2);
-        // CountT l1_sum1 = BlockReduceT(temp_storage)
-        //                  .Reduce(total1.m[i], cub::Sum{});
-        // cg::this_thread_block().sync();
-        // CountT l1_max1 = BlockReduceT(temp_storage)
-        //                  .Reduce(max1.m[i], cub::Max{});
-        // cg::this_thread_block().sync();
+
       Counters l1_sum2 = BlockReduceT(temp_storage)
                       .Reduce(total2, Sum_Counters{});
       cg::this_thread_block().sync();
@@ -424,7 +406,6 @@ void coloring2coopBase(IndexT* row_ptr,  // global mem
   cg::this_grid().sync();
 
   // The last block reduces the results of all other blocks
-
   auto& temp_storage_last =
       reinterpret_cast<typename BlockReduceTLast::TempStorage&>(temp_storage);
   if (blockIdx.x == 0) {

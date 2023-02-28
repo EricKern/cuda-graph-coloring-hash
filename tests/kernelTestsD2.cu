@@ -4,7 +4,7 @@
 #include "mat_loader.hpp"
 #include "setup.cuh"
 #include "d2_opt_kernel.cuh"
-#include "V2/WarpHash.cuh"
+#include "V2/warp_hash.cuh"
 
 namespace {
 using namespace apa22_coloring;

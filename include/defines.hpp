@@ -1,14 +1,6 @@
 #pragma once
 #include <unordered_map>
 namespace def {
-static constexpr const char* Mat0 =
-    "/home/eric/Documents/graph-coloring/cage3.mtx";
-static constexpr const char* Mat1 =
-    "/home/eric/Documents/graph-coloring/cage4.mtx";
-static constexpr const char* Mat2 =
-    "/home/eric/Documents/graph-coloring/CurlCurl_0.mtx";
-static constexpr const char* Mat3 =
-    "/home/eric/Documents/graph-coloring/CurlCurl_4.mtx";
 
 static constexpr const char* CurlCurl_0 =
     "/mnt/matrix_store/MM/Bodendiek/CurlCurl_0/CurlCurl_0.mtx";
@@ -61,25 +53,5 @@ std::unordered_map<std::string, const char*> map = {
     {"Cube_Coup_dt0", Cube_Coup_dt0},
     {"ML_Geer", ML_Geer}
 };
-// const char* choseMat(const char* mat_nr) {
-//   const char* return_mat;
-//   switch (mat_nr) {
-//     case strcmp(:
-//       return_mat = def::Mat0;
-//       break;
-//     case 1:
-//       return_mat = def::Mat1;
-//       break;
-//     case 2:
-//       return_mat = def::Mat2;
-//       break;
-//     case 3:
-//       return_mat = def::Mat3;
-//       break;
 
-//     default:
-//       return_mat = def::Mat2;
-//   }
-//   return return_mat;
-// }
 }  // namespace def

@@ -5,7 +5,7 @@
 #include "setup.cuh"
 #include "mat_loader.hpp"
 #include "d1_opt_kernel.cuh"
-#include "V2/WarpHash.cuh"
+#include "V2/warp_hash.cuh"
 
 using BLOCKS_SM = nvbench::enum_type_list<1, 2>;
 using THREADS_SM = nvbench::enum_type_list<256, 384, 512, 640, 768, 1024>;

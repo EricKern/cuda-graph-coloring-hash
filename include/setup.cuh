@@ -1,5 +1,8 @@
 #pragma once
 
+#include <stdexcept>
+#include <cstdio>
+
 #include "tiling.hpp"       //! header file for tiling
 #include "coloring_counters.cuh"
 #include "hash.cuh"
@@ -70,6 +73,7 @@ Tiling::Tiling(Distance dist,
   int const reserved_shMem_SM = BlockReserved * BLK_SM;
   int const max_dyn_SM = MaxShmemSizeSM - static_shMem_SM - reserved_shMem_SM;
   
+  // If you additionally want to play with the L1 Size
   // cudaFuncSetAttribute(kernel, cudaFuncAttributePreferredSharedMemoryCarveout, 100);
   cudaFuncSetAttribute(kernel,
                       cudaFuncAttributeMaxDynamicSharedMemorySize, max_dyn_SM);
@@ -110,8 +114,7 @@ Tiling::Tiling(Distance dist,
                       &n_tiles,
                       &max_node_degree);
   } else if (dist == D2_SortNet) {
-    // we can use only half of the shmem to store the tile because we need
-    // the other half to find dist2 collisions and since the
+    // We roundup the workspace to avoid bank conflicts
     auto calc_tile_size = [](int tile_rows, int tile_cols,
                              int max_node_degree) -> int {
 
@@ -127,10 +130,13 @@ Tiling::Tiling(Distance dist,
                       &n_tiles,
                       &max_node_degree);
   } else if (dist == D1_Warp) {
+    // Compared to initial distance 1 we now have to consider the node
+    // individual collision counters in shared memory
     const int groups_per_warp = 32 / num_hashes;
     auto calc_tile_size = [=](int tile_rows, int tile_cols,
                              int max_node_degree) -> int {
-
+      
+      // We round up for easier warp acces
       int row_counters = roundUp(tile_rows, groups_per_warp);
       int smem_collison_counters = row_counters * num_hashes * num_bit_widths;
       return (tile_cols + tile_rows + 1) * sizeof(int) +
@@ -144,8 +150,7 @@ Tiling::Tiling(Distance dist,
                       &n_tiles,
                       &max_node_degree);
   } else if (dist == D2_Warp) {
-    // we can use only half of the shmem to store the tile because we need
-    // the other half to find dist2 collisions
+    // Additional counters in shared memory and rounded up workspaces
     const int groups_per_warp = 32 / num_hashes;
 
     auto calc_tile_size = [=](int tile_rows, int tile_cols,
@@ -173,8 +178,8 @@ Tiling::Tiling(Distance dist,
                       &n_tiles,
                       &max_node_degree);
   } else if (dist == D2_Warp_small) {
-    // we can use only half of the shmem to store the tile because we need
-    // the other half to find dist2 collisions
+    // Additional counters in shared memory but this time with out rounded up
+    // workspaces
     const int groups_per_warp = 32 / num_hashes;
 
     auto calc_tile_size = [=](int tile_rows, int tile_cols,
@@ -196,7 +201,7 @@ Tiling::Tiling(Distance dist,
                       &n_tiles,
                       &max_node_degree);
   } else {
-    std::printf("Please pass a valid enum Distance");
+    throw std::runtime_error("Please pass a valid enum Distance");
   }
   // post processing
   get_MaxTileSize(n_tiles, tile_boundaries.get(), row_ptr,
@@ -226,7 +231,7 @@ class GPUSetupD1 {
   void operator=(GPUSetupD1 const&) = delete;
 
   GPUSetupD1(int* row_ptr, int* col_ptr, int* tile_boundaries, int n_tiles);
-  ~GPUSetupD1();
+  virtual ~GPUSetupD1();
 };
 
 // only constructor

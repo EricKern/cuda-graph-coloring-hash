@@ -9,8 +9,8 @@
 #include "mat_loader.hpp"
 #include "cli_bench.cu"
 #include "bench_util.cuh"
-#include "V2/WarpHash.cuh"
-#include "V2/WarpHashCoop.cuh"
+#include "V2/warp_hash.cuh"
+#include "V2/warp_hash_coop.cuh"
 
 using BLOCKS_SM = nvbench::enum_type_list<1, 2, 4>;
 using THREADS_SM = nvbench::enum_type_list<256, 384, 512, 640, 768, 896, 1024>;

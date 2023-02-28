@@ -1,6 +1,6 @@
 #include <nvbench/nvbench.cuh>
 
-#include "V2/WarpHashCoop.cuh"
+#include "V2/warp_hash_coop.cuh"
 #include "defines.hpp"
 #include "coloring_counters.cuh"
 #include "setup.cuh"
