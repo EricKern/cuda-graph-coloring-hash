@@ -1,10 +1,31 @@
 # Project Structure
 - in `./include` you find our kernel implementations
-- in `./tests` are unit test for each final version checking correctness
+- in `./tests` are unit test for each final version checking correctness against cpu versions
 - in `./benchmark` are the nvbench files for our different kernels
 
+- `APA_23_initial.pdf` is the initial version of the presentation
+- `APA_23_update.pdf` has the discussed feedback included
 
 
+## Build:
+This project has been built with the following spack packages
+
+    cuda@11.8.0
+    gcc@11.3.0
+    cmake@3.23.1
+    metis@5.1.0
+
+    and nvbench@main
+
+Pleas use cmake to build the project in a build directory.
+
+For example do:
+
+```
+mkdir build && cd build
+cmake ..
+make
+```
 
 ## Notes:
 The provided tiling algorithm in `./tiling/tiling.cpp` has been extended
