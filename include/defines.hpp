@@ -51,7 +51,7 @@ std::unordered_map<std::string, const char*> map = {
     {"CurlCurl_0", CurlCurl_0},
     {"CurlCurl_4", CurlCurl_4},
     {"atmosmodd", atmosmodd},
-    {"atmosmodd", atmosmodj},
+    {"atmosmodj", atmosmodj},
     {"atmosmodl", atmosmodl},
     {"atmosmodm", atmosmodm},
     {"af_shell3", af_shell3},

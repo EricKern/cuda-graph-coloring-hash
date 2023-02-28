@@ -1,19 +1,26 @@
+set(bench bench.out)
+add_executable(${bench} tail.cu)
+target_compile_options(${bench} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
+target_include_directories(${bench} PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/benchmark)
+target_link_libraries(${bench} PRIVATE tiling cpumultiply nvbench::nvbench)
+set_target_properties(${bench} PROPERTIES COMPILE_FEATURES cuda_std_17)
 
 
 
-set(cpy_bench cpy_bench.out)
-add_executable(${cpy_bench} cpy_bench.cu)
-target_compile_options(${cpy_bench} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
-target_include_directories(${cpy_bench} PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/benchmark)
-target_link_libraries(${cpy_bench} PRIVATE tiling cpumultiply nvbench::nvbench cusparse)
-set_target_properties(${cpy_bench} PROPERTIES COMPILE_FEATURES cuda_std_17)
 
-set(d1_part_kernels d1_part_kernels.out)
-add_executable(${d1_part_kernels} d1_part_kernels.cu)
-target_compile_options(${d1_part_kernels} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
-target_include_directories(${d1_part_kernels} PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/benchmark)
-target_link_libraries(${d1_part_kernels} PRIVATE tiling cpumultiply nvbench::nvbench)
-set_target_properties(${d1_part_kernels} PROPERTIES COMPILE_FEATURES cuda_std_17)
+# set(cpy_bench cpy_bench.out)
+# add_executable(${cpy_bench} cpy_bench.cu)
+# target_compile_options(${cpy_bench} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
+# target_include_directories(${cpy_bench} PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/benchmark)
+# target_link_libraries(${cpy_bench} PRIVATE tiling cpumultiply nvbench::nvbench cusparse)
+# set_target_properties(${cpy_bench} PROPERTIES COMPILE_FEATURES cuda_std_17)
+
+# set(d1_part_kernels d1_part_kernels.out)
+# add_executable(${d1_part_kernels} d1_part_kernels.cu)
+# target_compile_options(${d1_part_kernels} PRIVATE "$<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-Xptxas;-v;-lineinfo;>")
+# target_include_directories(${d1_part_kernels} PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/benchmark)
+# target_link_libraries(${d1_part_kernels} PRIVATE tiling cpumultiply nvbench::nvbench)
+# set_target_properties(${d1_part_kernels} PROPERTIES COMPILE_FEATURES cuda_std_17)
 
 # set(sortBench d1_d2_SortNet_bench.out)
 # add_executable(${sortBench} d1_d2_SortNet_bench.cu)
