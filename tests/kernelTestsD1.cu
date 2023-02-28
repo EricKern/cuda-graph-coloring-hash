@@ -14,10 +14,8 @@ using namespace apa22_coloring;
 static constexpr int MAX_THREADS_SM = 512;
 static constexpr int BLK_SM = 1;
 static constexpr int THREADS = MAX_THREADS_SM/BLK_SM;
-static constexpr const char* LocalCurlCurl_4 =
-  "/home/eric/Documents/graph-coloring/CurlCurl_4.mtx";
 
-MatLoader& mat_loader = MatLoader::getInstance(LocalCurlCurl_4);
+MatLoader& mat_loader = MatLoader::getInstance();
 
 void D1kernelTest(Distance tag, void* kernel_fn, bool coop=false){
   Tiling tiling(tag, BLK_SM,

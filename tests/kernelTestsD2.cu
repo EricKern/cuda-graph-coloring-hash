@@ -13,15 +13,14 @@ using namespace apa22_coloring;
 static constexpr int MAX_THREADS_SM = 512;
 static constexpr int BLK_SM = 1;
 static constexpr int THREADS = MAX_THREADS_SM/BLK_SM;
-static constexpr const char* LocalCurlCurl_4 =
-  "/home/eric/Documents/graph-coloring/CurlCurl_4.mtx";
 
-MatLoader& mat_loader = MatLoader::getInstance(LocalCurlCurl_4);
+MatLoader& mat_loader = MatLoader::getInstance();
 
 enum LaunchType {
     without_maxNodeDegree,
     with_maxNodeDegree,
     reduced_Interface,
+    reduced_Interface_withoutMaxDegree
 };
 
 void D2kernelTest(Distance tag, void* kernel_fn, LaunchType launch_type){
@@ -90,6 +89,20 @@ void D2kernelTest(Distance tag, void* kernel_fn, LaunchType launch_type){
     cudaLaunchKernel(kernel_fn, gridSize, blockSize, kernelArgs, shMem_bytes, cudaStreamDefault);
     }
     break;
+
+  case reduced_Interface_withoutMaxDegree:
+    {
+    void *kernelArgs[] = {(void *)&gpu_setup.d_row_ptr,
+                          (void *)&gpu_setup.d_col_ptr,
+                          (void *)&gpu_setup.d_tile_boundaries,
+                          (void *)&gpu_setup.blocks_total2,
+                          (void *)&gpu_setup.blocks_max2,
+                          (void *)&gpu_setup.d_total2,
+                          (void *)&gpu_setup.d_max2
+                          };
+    cudaLaunchKernel(kernel_fn, gridSize, blockSize, kernelArgs, shMem_bytes, cudaStreamDefault);
+    }
+    break;
   
   default:
     break;
@@ -147,8 +160,15 @@ TEST(Distance2Kernels, D2SortNetBankConflictFree) {
 
 TEST(Distance2Kernels, D2Warp) {
   D2kernelTest(D2_Warp,
-               (void*)D2warp<THREADS, BLK_SM, 16, 3, int, char, 8, 3, int>,
+               (void*)D2warp<THREADS, BLK_SM, num_hashes, start_hash,
+                    int, char, num_bit_widths, start_bit_width, int>,
                reduced_Interface);
+}
+TEST(Distance2Kernels, D2warp_Conflicts) {
+  D2kernelTest(D2_Warp_small,
+               (void*)D2warp_Conflicts<THREADS, BLK_SM, num_hashes, start_hash,
+                    int, char, num_bit_widths, start_bit_width, int>,
+               reduced_Interface_withoutMaxDegree);
 }
 
 }
