@@ -4,7 +4,7 @@
 - in `./benchmark` are the nvbench files for our different kernels
 
 - `APA_23_initial.pdf` is the initial version of the presentation
-- `APA_23_update.pdf` has the discussed feedback included
+- `APA_23_final.pdf` has the discussed feedback included
 
 
 ## Build:
