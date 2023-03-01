@@ -78,11 +78,12 @@ void coloring1coopWarpTail(IndexT* row_ptr,
             blocks_max1[idxOut] = coop_max1[idx];
         }
     }
-    cg::this_grid().sync();
+
+    auto duration = clock() - start;
     if (threadIdx.x == 0) {
-      auto duration = clock() - start;
       durations[blockIdx.x] = duration;
     }
+    cg::this_grid().sync();
 
     typedef cub::BlockReduce<CountT, THREADS> BlockReduceT;
     auto& temp_storage = reinterpret_cast<typename BlockReduceT::TempStorage&>(shMem);
@@ -181,11 +182,11 @@ void coloring2coopWarpTail(IndexT* row_ptr,  // global mem
       }
   }
 
-  cg::this_grid().sync();
+  auto duration = clock() - start;
   if (threadIdx.x == 0) {
-    auto duration = clock() - start;
     durations[blockIdx.x] = duration;
   }  
+  cg::this_grid().sync();
 
   // The last block reduces the results of all other blocks
 
@@ -285,11 +286,11 @@ void coloring2coopWarpTailBig(IndexT* row_ptr,  // global mem
       }
   }
 
-  cg::this_grid().sync();
+  auto duration = clock() - start;
   if (threadIdx.x == 0) {
-    auto duration = clock() - start;
     durations[blockIdx.x] = duration;
   }  
+  cg::this_grid().sync();
 
   // The last block reduces the results of all other blocks
 
